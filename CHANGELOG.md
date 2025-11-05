@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.9.2 — 2025-11-05
+
+Hotfix:
+- Fix import-time NameError for `NumPyModule` in tests by defining runtime aliases for protocol types.
+- Slightly broaden DICOM dataset typing hints to include `.get` and `file_meta`.
+
 ## 0.9.1 — 2025-11-05
 
 Highlights:
