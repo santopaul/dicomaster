@@ -18,7 +18,14 @@ def test_pseudonymize_value_returns_token_and_salt():
 def test_apply_anonymization_updates_map():
     sanitized = {'patient_name': 'Jane Doe', 'patient_id': '12345'}
     run_map = {}
-    sanitized_after, per_file_map = apply_anonymization_to_sanitized(dict(sanitized), ['patient_name', 'patient_id'], 'pseudonymize', 'testsalt', run_map, '/tmp/fake.dcm')
+    sanitized_after, per_file_map = apply_anonymization_to_sanitized(
+        dict(sanitized),
+        ['patient_name', 'patient_id'],
+        'pseudonymize',
+        'testsalt',
+        run_map,
+        '/tmp/fake.dcm',
+    )
     # sanitized should be modified
     assert sanitized_after.get('patient_name', '').startswith('anon_')
     assert '/tmp/fake.dcm' in run_map

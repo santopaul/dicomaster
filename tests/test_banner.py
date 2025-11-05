@@ -7,7 +7,6 @@ from io import StringIO
 from typing import Any
 
 import pytest
-
 from dicomaster import pretty_print_stat, show_banner
 
 
@@ -38,7 +37,6 @@ def test_show_banner_no_banner():
         show_banner(args)
     assert out.getvalue() == ''
 
-
     def test_show_banner_fallback():
         """Test that banner falls back gracefully."""
         args = argparse.Namespace(quiet=False, no_banner=False)
@@ -47,6 +45,8 @@ def test_show_banner_no_banner():
         output = out.getvalue()
         assert 'DICOM' in output
         assert 'Santo Paul' in output
+
+
 @pytest.mark.parametrize('color', [True, False])
 def test_pretty_print_stat(color: bool):
     """Test pretty stat printing with and without color."""
@@ -57,7 +57,7 @@ def test_pretty_print_stat(color: bool):
         'body_part_examined': 'BRAIN',
         'study_date_time': '2023-01-01 15:30:00',
         'urgent': False,
-        'urgent_reasons': []
+        'urgent_reasons': [],
     }
     full: dict[str, Any] = {}
 
@@ -81,7 +81,7 @@ def test_pretty_print_stat_urgent():
         'body_part_examined': 'BRAIN',
         'study_date_time': '2023-01-01 15:30:00',
         'urgent': True,
-        'urgent_reasons': ['Contrast reaction', 'Critical finding']
+        'urgent_reasons': ['Contrast reaction', 'Critical finding'],
     }
     full: dict[str, Any] = {}
 

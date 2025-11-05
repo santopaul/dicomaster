@@ -48,12 +48,16 @@ def test_process_and_anonymize_roundtrip(tmp_path: Path):
         quiet=False,
     )
 
-    res = process_and_save(str(dcm_path), args, outputs_map, amap, dry_run=False, suppress_details=False)
+    res = process_and_save(
+        str(dcm_path), args, outputs_map, amap, dry_run=False, suppress_details=False
+    )
     assert res is not None
     # Anonymization map should have an entry for file
     assert str(dcm_path.resolve()) in amap or amap == {} or isinstance(amap, dict)
     # JSON output file should exist when not dry run
-    outjson = Path(args.output_dir) / (dcm_path.stem + "_" + (dcm_path.name.split('.')[0]) + "_metadata.json")
+    outjson = Path(args.output_dir) / (
+        dcm_path.stem + "_" + (dcm_path.name.split('.')[0]) + "_metadata.json"
+    )
     # process_and_save names output with md5 short; just assert some json file exists in output dir
     json_files = list(Path(args.output_dir).glob("*_metadata.json"))
     assert json_files
