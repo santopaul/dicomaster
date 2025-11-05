@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-dicomaster — Robust DICOM metadata extractor & anonymizer (release polish)
+dicomaster — Robust DICOM metadata extractor & anonymizer with fast batch processing
 
 This file incorporates the prioritized fixes you requested:
  - PBKDF2 pseudonymization (cryptography optional) with correct use of KDF output
@@ -16,7 +16,7 @@ This file incorporates the prioritized fixes you requested:
  - Salt length warning when cryptography available and salt short
  - Quiet mode truly suppresses info-level progress
 
-Usage: see argparse help (``python dicom_tool.py -h``)
+Usage: see argparse help (``python dicomaster.py -h``)
 """
 
 from __future__ import annotations
