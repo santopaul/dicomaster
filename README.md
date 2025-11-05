@@ -185,4 +185,3 @@ Made with ❤️ by Santo Paul
 🌐 GitHub: [santopaul/dicomaster](https://github.com/santopaul/dicomaster)
 
 ✍️ Medium: @santopaul
----
