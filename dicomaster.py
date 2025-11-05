@@ -36,7 +36,7 @@ import traceback
 from collections.abc import Iterable
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from contextlib import suppress
-from datetime import datetime
+from datetime import datetime, time
 from pathlib import Path
 from typing import (
     TYPE_CHECKING,
@@ -49,14 +49,6 @@ from typing import (
 # Type variables for generic use
 T = TypeVar('T')
 T_co = TypeVar('T_co', covariant=True)
-
-# Define runtime types for imports
-PILImage = Any
-PILDraw = Any
-PILFont = Any
-NDArray = Any
-DicomDataset = Any
-NumPyModule = Any
 
 # Runtime module references
 np: NumPyModule | None = None
@@ -472,7 +464,11 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Show full private tag values (may contain PHI)",
     )
-    g_misc.add_argument("--minimal", action="store_true", help="Only show STAT quick summary")
+    g_misc.add_argument(
+        "--minimal",
+        action="store_true",
+        help="Show STAT quick summary (default for single-file runs)",
+    )
     group = g_misc.add_mutually_exclusive_group()
     group.add_argument("--detail", action="store_true", help="Show detailed technical information")
     group.add_argument(
@@ -1700,8 +1696,16 @@ def process_and_save(
         )
 
     if not args.batch or args.verbose > 0:
-        # If user requested the minimal STAT view, render a pretty colored single-line summary
-        show_stat = getattr(args, 'minimal', False) and not getattr(args, 'quiet', False)
+        # Default: show pretty STAT summary for single-file runs unless quiet/batch-suppressed
+        default_pretty = (
+            not getattr(args, 'detail', False)
+            and not getattr(args, 'full', False)
+            and not getattr(args, 'batch', False)
+        )
+        # If user requested the minimal STAT view, or default applies, render pretty summary
+        show_stat = (getattr(args, 'minimal', False) or default_pretty) and not getattr(
+            args, 'quiet', False
+        )
         if show_stat:
             try:
                 # Pass both the stat summary and full metadata for detailed views
@@ -2410,3 +2414,11 @@ def main():
 
 if __name__ == '__main__':
     main()
+else:
+    # At runtime, these protocol names are only used in annotations/casts; map to Any
+    PILImage = Any  # type: ignore[misc,assignment]
+    PILDraw = Any  # type: ignore[misc,assignment]
+    PILFont = Any  # type: ignore[misc,assignment]
+    NDArray = Any  # type: ignore[misc,assignment]
+    NumPyModule = Any  # type: ignore[misc,assignment]
+    DicomDataset = Any  # type: ignore[misc,assignment]
