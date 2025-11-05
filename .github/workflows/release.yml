@@ -30,11 +30,30 @@ jobs:
         run: |
           python -m build
 
-      - name: Publish to PyPI
-        if: startsWith(github.ref, 'refs/tags/')
+      - name: Detect PyPI token
+        shell: bash
+        run: |
+          if [ -n "${{ secrets.PYPI_API_TOKEN }}" ]; then
+            echo "HAS_PYPI_TOKEN=true" >> $GITHUB_ENV
+          else
+            echo "HAS_PYPI_TOKEN=false" >> $GITHUB_ENV
+          fi
+
+      # Prefer Twine if a classic PyPI token is provided
+      - name: Publish to PyPI with Twine
+        if: ${{ env.HAS_PYPI_TOKEN == 'true' && (startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch') }}
+        env:
+          TWINE_USERNAME: __token__
+          TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}
+        run: |
+          python -m pip install --upgrade twine
+          python -m twine upload --skip-existing dist/*
+
+      # Fallback: Use PyPI Trusted Publishing via OIDC when no token is provided
+      - name: Publish to PyPI via OIDC (Trusted Publishing)
+        if: ${{ env.HAS_PYPI_TOKEN == 'false' && startsWith(github.ref, 'refs/tags/') }}
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
-          password: ${{ secrets.PYPI_API_TOKEN }}
           skip-existing: true
 
       - name: Create GitHub Release
