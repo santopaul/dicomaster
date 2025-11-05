@@ -1,8 +1,10 @@
 # Dicomaster  
 **Secure, High-performance DICOM anonymization and metadata extraction for research and healthcare.**  
 
-[![PyPI version](https://badge.fury.io/py/dicomaster.svg)](https://badge.fury.io/py/dicomaster) [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT) [![Tests](https://github.com/santopaul/dicomaster/actions/workflows/ci.yml/badge.svg)](https://github.com/santopaul/dicomaster/actions)
-
+[![PyPI version](https://badge.fury.io/py/dicomaster.svg)](https://badge.fury.io/py/dicomaster) 
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT) 
+[![Tests](https://github.com/santopaul/dicomaster/actions/workflows/ci.yml/badge.svg)](https://github.com/santopaul/dicomaster/actions)
+[![Stars](https://img.shields.io/github/stars/santopaul/dicomaster?style=social)](https://github.com/santopaul/dicomaster/stargazers)
 
 ---
 > “Every byte of data represents a life worth protecting.” — *Santo Paul*
@@ -66,15 +68,17 @@ I saw those DICOM files on Kaggle and thought, **_"There's gotta be a better way
 ### **Setup**
 
 **Quick Install**
-
+```
 pip install dicomaster # Download Pypi version
 
 dicomaster --check-deps # Make sure every dependencies required are installed
+```
+![CLI installation in Linux](readme_images/image2.png)
 
 Always creating a virtual environment is recommended.
 
 Or install using github
-
+```
 git clone <https://github.com/santopaul/dicomaster.git>
 
 cd dicomaster
@@ -82,35 +86,38 @@ cd dicomaster
 pip install -e .\[full\] # Full deps
 
 python dicomaster.py --check-deps # Verify setup
+```
 
 ### **Usage examples**
 
 #### **Interactive Mode**
 
 Ideal for quick exploration or one-off checks, automatically drops you into an interactive REPL when no arguments are passed.
-
+```
 python dicomaster.py
-
+```
 Once inside, simply enter file paths when prompted.
 
 Or, for direct inspection with detailed metadata:
-
+```
 python dicomaster.py sample.dcm --minimal --detail
-
+```
 #### **Batch Processing**
 
 For large-scale research datasets (e.g., RSNA or TCIA collections), **Dicomaster** can process entire folders recursively which is fast and secure.
-
+```
 python dicomaster.py --batch /kaggle/input/rsna-intracranial-aneurysm-detection/series/1.2.826.0.1.3680043.8.498.10004044428023505108375152878107656647 -o agg-csv -t 8
+```
+![The screenshot above shows Dicomaster processing ~200 files in seconds, thanks to its optimized batch engine and threaded design.](readme_images/image3.png)
 
 The screenshot above shows **Dicomaster** processing ~200 files in seconds, thanks to its optimized batch engine and threaded design.
 
 #### **Batch Anonymization**
 
 Perform bulk anonymization while exporting **combined metadata** (agg-csv) and **FHIR data** for AI or EHR pipelines.
-
+```
 python dicomaster.py --batch /data/tcia -o agg-csv,fhir --anonymize --anonymize-salt mysecret --threads 8
-
+```
 - Uses PBKDF2 pseudonymization for PHI tags
 - Exports FHIR bundles compatible with hospital systems
 - Generates AI-ready metadata (combined_metadata.csv)
@@ -170,6 +177,7 @@ I truly hope this is the start of something big.
 
 ⭐[**Star the repo**](https://github.com/santopaul/dicomaster) if you believe medical AI deserves better tools.
 
+---
 Made with ❤️ by Santo Paul
 
 📦 PyPI: pip install dicomaster
@@ -177,3 +185,4 @@ Made with ❤️ by Santo Paul
 🌐 GitHub: [santopaul/dicomaster](https://github.com/santopaul/dicomaster)
 
 ✍️ Medium: @santopaul
+---
