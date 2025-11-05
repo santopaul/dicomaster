@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-dicom_tool.py — Robust DICOM metadata extractor & anonymizer (final polish)
+dicomaster — Robust DICOM metadata extractor & anonymizer (release polish)
 
 This file incorporates the prioritized fixes you requested:
  - PBKDF2 pseudonymization (cryptography optional) with correct use of KDF output
@@ -119,9 +119,6 @@ if TYPE_CHECKING:
         def pixel_array(self) -> NDArray: ...
         def __getitem__(self, key: str) -> Any: ...
         def __setitem__(self, key: str, value: Any) -> None: ...
-    def pixel_array(self) -> NDArrayProto: ...
-    def __getitem__(self, key: str) -> Any: ...
-    def __setitem__(self, key: str, value: Any) -> None: ...
 
 
 class DicomModule(Protocol):
@@ -381,7 +378,7 @@ ANON_MAP_LOCK = threading.Lock()
 
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(
-        prog="dicom_tool.py", description="DICOM metadata extractor & fast batch aggregator"
+        prog="dicomaster", description="DICOM metadata extractor & fast batch aggregator"
     )
     p.add_argument(
         "path",
@@ -555,50 +552,61 @@ def show_banner(args: argparse.Namespace) -> None:
 
     name = 'Santo Paul'
     try:
-        if _BANNER_AVAILABLE and pyfiglet is not None:
-            # Use custom fonts and colors if pyfiglet/termcolor available
-            banner_lines: list[str] = []
-            banner_text = ''
+        # Best-effort: if banner libs missing, try to import on the fly (never fatal)
+        from typing import Any as _Any
+        local_colored: _Any = None
+        local_pyfiglet: _Any = None
+        pyf = globals().get('pyfiglet', None)
+        if _BANNER_AVAILABLE and pyf is not None:
+            local_colored = safe_colored  # reuse
+            local_pyfiglet = pyf
+        else:
+            try:
+                import importlib
+                local_pyfiglet = importlib.import_module('pyfiglet')
+                from termcolor import colored as _colored  # type: ignore
 
-            # Main title with shadow effect
-            for font in ['big', 'standard']:
+                def local_colored(t: str, color: str | None = None, attrs: list[str] | None = None) -> str:  # type: ignore
+                    return _colored(t, color, attrs=attrs)
+            except Exception:
+                # Best-effort auto-install for banner deps; never fatal
                 try:
-                    art = pyfiglet.figlet_format('DICOMASTER', font=font)
-                    if isinstance(art, str) and len(art.splitlines()[0]) <= 80:
-                        banner_text = art
-                        break
+                    import subprocess
+                    import sys as _sys
+                    subprocess.run(
+                        [_sys.executable, '-m', 'pip', 'install', '--disable-pip-version-check', '-q', 'pyfiglet', 'termcolor', 'colorama'],
+                        check=False,
+                        capture_output=True,
+                        text=True,
+                    )
+                    import importlib
+                    local_pyfiglet = importlib.import_module('pyfiglet')
+                    from termcolor import colored as _colored  # type: ignore
+
+                    def local_colored(t: str, color: str | None = None, attrs: list[str] | None = None) -> str:  # type: ignore
+                        return _colored(t, color, attrs=attrs)
                 except Exception:
-                    continue
+                    local_pyfiglet = None
+                    local_colored = None
 
-            if not banner_text:  # Fallback to default font
-                try:
-                    banner_text = pyfiglet.figlet_format('DICOMASTER')
-                except Exception:
-                    banner_text = 'Dicomaster'  # Plain text fallback
-
-            # Apply gradients and effects
-            colored_banner = safe_colored(banner_text, 'green', attrs=['bold'])
-            banner_lines.append(colored_banner)
-
-            # Metadata line with author attribution
-            author = safe_colored(name, 'yellow', attrs=['bold'])
-            version = safe_colored(f'v{__version__}', 'cyan', attrs=['bold'])
-            description = safe_colored(
-                'Secure DICOM Anonymizer & Batch Processor', 'white', attrs=['bold']
-            )
-            banner_lines.append(f"{version} — {description} by {author}")
-
-            # Print composed banner
-            print('\n'.join(banner_lines))
+        if local_pyfiglet is not None and local_colored is not None:
+            # Create ASCII art banner with a straight (non-slanted) font
+            art = local_pyfiglet.figlet_format('Dicomaster', font='standard')
+            print(local_colored(art, 'green', attrs=['bold']))
+            # Single-line tagline: everything bold except the word 'by'
+            vpart = local_colored(f"v{__version__}", 'cyan', attrs=['bold'])
+            mid = local_colored(" — Secure DICOM Anonymizer & Batch Processor ", 'white', attrs=['bold'])
+            by = local_colored("by ", 'white')  # intentionally not bold
+            npart = local_colored(name, 'yellow', attrs=['bold'])
+            print(vpart + mid + by + npart)
+            print()  # spacing
             return
 
     except Exception as e:
         logging.debug("Banner error (non-fatal): %s", e)
 
-    # Simple fallback banner (no color libs available)
-    print(
-        f"*** Dicomaster v{__version__} — Secure DICOM Anonymizer & Batch Processor by {name} ***"
-    )
+    # Simple fallback banner (no color libs available) single-line
+    print(f"*** Dicomaster v{__version__} — Secure DICOM Anonymizer & Batch Processor by {name} ***")
 
 
 def pretty_print_stat(
@@ -631,168 +639,336 @@ def pretty_print_stat(
     - PHI warnings if present
     """
     try:
+        # Helper for safe coloring with fallback to plain text
+        def cc(text: object, col: str | None = None, attrs: list[str] | None = None) -> str:
+            t = str(text)
+            return safe_colored(t, col, attrs=attrs) if color and col else t
+
+        def b(text: object) -> str:
+            return cc(text, 'white', ['bold']) if color else str(text)
+
         # Prepare critical fields with safe defaults
         age = str(stat.get('patient_age', 'N/A'))
         sex = str(stat.get('patient_sex', 'N/A'))
-        modality = str(stat.get('modality', 'N/A'))
-        body = str(stat.get('body_part_examined', 'N/A'))
-        dt = str(stat.get('study_date_time', 'N/A'))
+        modality = str(stat.get('modality', 'N/A')).upper()
+        body = str(stat.get('body_part_examined', '')).upper()
+        study_desc = str(stat.get('study_description', '')).strip()
+        series_desc = str(stat.get('series_description', '')).strip()
+        accession = str(stat.get('accession_number', '')).strip()
+        study_id = str(stat.get('study_id', '')).strip()
         urgent = bool(stat.get('urgent', False))
         reasons = list(map(str, stat.get('urgent_reasons', []))) or []
 
-        # Additional summary fields
-        study_desc = str(stat.get('study_description', ''))
-        series_desc = str(stat.get('series_description', ''))
-        accession = str(stat.get('accession_number', ''))
-        study_id = str(stat.get('study_id', ''))
-        station = str(stat.get('station_name', ''))
+        # PHI context (compute early to optionally show a headline badge)
+        phi_flags: list[str] = []
+        private_tags = []
+        try:
+            if isinstance(full, dict):
+                phi_flags = list(map(str, full.get('phi_flags', [])))  # type: ignore[assignment]
+                private_tags = full.get('private_tags', []) or []
+            if not phi_flags:
+                phi_flags = list(map(str, stat.get('phi_flags', [])))
+        except Exception:
+            pass
 
-        if color and _BANNER_AVAILABLE:
-            # Color-coded summary with visual hierarchy
-            status_color = 'red' if urgent else 'green'
-            status_text = (
-                safe_colored('URGENT', status_color, attrs=['bold', 'blink'])
-                if urgent
-                else safe_colored('OK', status_color)
+        # Date/time: try to pretty format and include relative time
+        dt_display = str(stat.get('study_date_time', '')).strip()
+        rel_text = ''
+        date_str: str | None = None
+        time_str: str | None = None
+        if isinstance(full, dict):
+            date_str = (full.get('study_date') or stat.get('study_date') or None)  # type: ignore[assignment]
+            time_str = (full.get('study_time') or stat.get('study_time') or None)  # type: ignore[assignment]
+        try:
+            if date_str:
+                fmt, _future, dt_obj = format_dicom_datetime(date_str, time_str)  # type: ignore[misc]
+                dt_display = fmt
+                if dt_obj is not None:
+                    rel = human_readable_delta(dt_obj)
+                    if rel and rel != 'just now':
+                        rel_text = f" ({rel} ago)"
+        except Exception:
+            # Fallback to whatever stat provided
+            pass
+
+        # One-line headline similar to the screenshot style
+        # Badge text kept compatible with tests: [URGENT] or [OK] (green)
+        status = cc('[URGENT]', 'red', ['bold']) if urgent else cc('[OK]', 'green', ['bold'])
+        age_sex = f"{cc(age, 'yellow', ['bold'])} {cc('|', 'white')} {cc(sex, 'white', ['bold'])}"
+        mod_body = (
+            f"{cc(modality, 'cyan', ['bold'])} {cc(body, 'cyan')}" if body else cc(modality, 'cyan', ['bold'])
+        )
+        # Avoid duplicating any existing relative suffix already embedded in dt_display
+        base_dt = dt_display.split(' (')[0].strip() if dt_display else dt_display
+        dt_part = f"{cc(base_dt, 'green')}{cc(rel_text, 'green') if rel_text else ''}"
+        # Headline (no PHI badge here; PHI summary printed below)
+        print(f"{status} {age_sex} — {mod_body} — {dt_part}")
+        pad = '  '
+
+        # Study and identifiers
+        if study_desc or series_desc:
+            print(f"{pad}{b('Study:')} {study_desc or '-'}")
+            if series_desc:
+                print(f"{pad}{b('Series:')} {series_desc}")
+
+        ids_parts: list[str] = []
+        if accession:
+            ids_parts.append(f"ACC#{cc(accession, 'yellow', ['bold'])}")
+        if study_id:
+            ids_parts.append(f"ID:{cc(study_id, 'yellow')}")
+        if ids_parts:
+            print(f"{pad}{b('IDs:')} " + ", ".join(ids_parts))
+
+        if urgent and reasons:
+            print(f"{pad}{cc('Alert:', 'red', ['bold'])} {cc(', '.join(reasons), 'red')}")
+
+        # Physicians (minimal block too) — summarize if available
+        roles: list[str] = []
+        if isinstance(full, dict):
+            _ref = str(full.get('referring_physician_name', '')).strip()
+            _att = (
+                str(full.get('attending_physician_name', '')).strip()
+                or str(full.get('attending_physicians_name', '')).strip()
             )
+            _perf = str(full.get('performing_physician_name', '')).strip()
+            _read = str(full.get('reading_physicians', '')).strip()
+            _req = str(full.get('requesting_physician', '')).strip()
+            _cons = str(full.get('consulting_physician_name', '')).strip()
+            _appr = str(full.get('physician_approving_interpretation', '')).strip()
+            _sched = str(full.get('scheduled_performing_physician_name', '')).strip()
+            if _ref: roles.append(f"Ref: {_ref}")
+            if _att: roles.append(f"Att: {_att}")
+            if _perf: roles.append(f"Perf: {_perf}")
+            if _read: roles.append(f"Read: {_read}")
+            if _req: roles.append(f"Req: {_req}")
+            if _cons: roles.append(f"Cons: {_cons}")
+            if _appr: roles.append(f"Appr: {_appr}")
+            if _sched: roles.append(f"Sched: {_sched}")
+        if roles:
+            print(f"{pad}{b('Physicians:')} " + " | ".join(roles))
 
-            # Patient demographics (yellow)
-            left = safe_colored(f"{age} | {sex}", 'yellow', attrs=['bold'])
+        if phi_flags or private_tags:
+            extras = []
+            if phi_flags:
+                extras.append(', '.join(phi_flags))
+            if private_tags:
+                try:
+                    extras.append(f"Private tags: {len(private_tags)}")
+                except Exception:
+                    pass
+            # New line and no indentation for PHI warning
+            print()
+            print(f"{cc('⚠ PHI Warning:', 'red', ['bold'])} {cc(' | '.join(extras), 'red')}")
 
-            # Modality info (cyan with bold modality)
-            mid = safe_colored(modality, 'cyan', attrs=['bold']) + safe_colored(f" {body}", 'cyan')
+        # Optional detailed section
+        if detail and isinstance(full, dict):
+            print()
+            print(pad + cc('=== Detailed Information ===', 'cyan', ['bold']))
+            station = str(full.get('station_name', '')).strip()
+            if station:
+                print(f"{pad}{b('Scanner:')} {cc(station, 'cyan')}")
+            inst = str(full.get('institution_name', '')).strip()
+            if inst:
+                print(f"{pad}{b('Institution:')} {cc(inst, 'white')}")
+            ref = str(full.get('referring_physician_name', '')).strip()
+            attend = (
+                str(full.get('attending_physician_name', '')).strip()
+                or str(full.get('attending_physicians_name', '')).strip()
+            )
+            perf = str(full.get('performing_physician_name', '')).strip()
+            read = str(full.get('reading_physicians', '')).strip()
+            req = str(full.get('requesting_physician', '')).strip()
+            cons = str(full.get('consulting_physician_name', '')).strip()
+            appr = str(full.get('physician_approving_interpretation', '')).strip()
+            sched = str(full.get('scheduled_performing_physician_name', '')).strip()
 
-            # Study time (green)
-            right = safe_colored(dt, 'green')
+            role_parts: list[str] = []
+            if ref:
+                role_parts.append(f"Ref: {ref}")
+            if attend:
+                role_parts.append(f"Att: {attend}")
+            if perf:
+                role_parts.append(f"Perf: {perf}")
+            if read:
+                role_parts.append(f"Read: {read}")
+            if req:
+                role_parts.append(f"Req: {req}")
+            if cons:
+                role_parts.append(f"Cons: {cons}")
+            if appr:
+                role_parts.append(f"Appr: {appr}")
+            if sched:
+                role_parts.append(f"Sched: {sched}")
 
-            # Main summary line
-            print(f"[{status_text}] {left} — {mid} — {right}")
+            if role_parts:
+                print(f"{pad}{b('Physicians:')} {' | '.join(role_parts)}")
 
-            # Study descriptions if available
-            if study_desc or series_desc:
-                desc = safe_colored('Study:', 'white', attrs=['bold'])
-                if study_desc:
-                    desc += ' ' + safe_colored(study_desc, 'white')
-                if series_desc:
-                    desc += ' / ' + safe_colored(series_desc, 'white')
-                print(f"  {desc}")
+            # Referring contact details if present
+            ref_addr = str(full.get('referring_physician_address', '')).strip()
+            ref_tel = str(full.get('referring_physician_phone', '')).strip()
+            if ref_addr or ref_tel:
+                contact_bits: list[str] = []
+                if ref_addr:
+                    contact_bits.append(f"Addr: {ref_addr}")
+                if ref_tel:
+                    contact_bits.append(f"Tel: {ref_tel}")
+                print(f"{pad}{b('Ref Contact:')} {' | '.join(contact_bits)}")
+            manuf = str(full.get('manufacturer', '')).strip()
+            model = str(full.get('manufacturer_model_name', '')).strip() or str(full.get('model', '')).strip()
+            if manuf or model:
+                mm = ' '.join([p for p in [manuf, model] if p])
+                print(f"{pad}{b('Device:')} {cc(mm, 'white')}")
+            mfs = str(full.get('magnetic_field_strength', '')).strip()
+            if mfs:
+                print(f"{pad}{b('Magnet:')} {cc(mfs, 'white')} {cc('T', 'white') if str(mfs).isdigit() else ''}")
+            sw = str(full.get('software_versions', '')).strip()
+            if sw:
+                print(f"{pad}{b('Software:')} {cc(sw, 'white')}")
 
-            # Study identifiers
-            if accession or study_id:
-                ids = safe_colored('IDs:', 'white', attrs=['bold'])
-                if accession:
-                    ids += ' ACC#' + safe_colored(accession, 'white')
-                if study_id:
-                    ids += ' Study#' + safe_colored(study_id, 'white')
-                print(f"  {ids}")
+            # Patient & Study section (attractive two-column)
+            pt_map = {
+                'Patient Name': 'patient_name',
+                'Patient ID': 'patient_id',
+                'Birth Date': 'patient_birth_date',
+                'Birth Time': 'patient_birth_time',
+                'Age': 'patient_age',
+                'Address': 'patient_address',
+                'Other IDs': 'other_patient_ids',
+                'Other Names': 'other_patient_names',
+                'Accession': 'accession_number',
+                'Study ID': 'study_id',
+                'Series Desc': 'series_description',
+                'Study Comments': 'study_comments',
+                'Institution': 'institution_name',
+                'Station': 'station_name',
+                'Operators': 'operators_name',
+            }
+            def _fmt_pn(s: object) -> str:
+                t = str(s)
+                if '^' in t:
+                    parts = t.split('^')
+                    # Prefer First Last when possible
+                    last = parts[0].strip()
+                    first = (parts[1] if len(parts) > 1 else '').strip()
+                    mid = (parts[2] if len(parts) > 2 else '').strip()
+                    return ' '.join([p for p in [first, mid, last] if p]) or t
+                return t
+            pt_pairs = []
+            for label, key in pt_map.items():
+                v = full.get(key)
+                if v not in (None, '', 'N/A'):
+                    sv = _fmt_pn(v) if 'Name' in label else str(v)
+                    pt_pairs.append((label, sv))
+            if pt_pairs:
+                print()
+                print(pad + cc('--- Patient & Study ---', 'cyan', ['bold']))
+                two = []
+                def fmt_pair2(k: str, v: str) -> str:
+                    return f"{cc('•', 'white')} {cc(k + ':', 'cyan')} {cc(v, 'white')}"
+                for pair in pt_pairs:
+                    two.append(pair)
+                    if len(two) == 2:
+                        left = fmt_pair2(*two[0])
+                        right = fmt_pair2(*two[1])
+                        print(pad + '  ' + left.ljust(60) + '  ' + right)
+                        two = []
+                if two:
+                    print(pad + '  ' + fmt_pair2(*two[0]))
+            rows = full.get('rows', 'N/A')
+            cols = full.get('columns', 'N/A')
+            bits = full.get('bits_allocated', 'N/A')
+            series_no = full.get('series_number', '1')
+            acq_no = full.get('acquisition_number', '1')
+            print(f"{pad}{b('Image:')} {rows}×{cols}px, {bits}-bit, Series #{series_no}, Acq #{acq_no}")
+            px = str(full.get('pixel_spacing', '') or '').strip()
+            thick = str(full.get('slice_thickness', '') or '').strip()
+            if px or thick:
+                pieces = []
+                if px:
+                    pieces.append(f"Pixel spacing: {px}")
+                if thick:
+                    pieces.append(f"Slice thickness: {thick}")
+                print(f"{pad}{b('Geometry:')} {' | '.join(pieces)}")
 
-            # Urgent reasons in red if present
-            if urgent and reasons:
-                reasons_text = safe_colored('  Alert:', 'red', attrs=['bold'])
-                reasons_list = safe_colored(', '.join(reasons), 'red')
-                print(f"{reasons_text} {reasons_list}")
+            tr = full.get('repetition_time', '')
+            te = full.get('echo_time', '')
+            seq_parts: list[str] = []
+            if tr:
+                seq_parts.append(f"TR={tr}ms")
+            if te:
+                seq_parts.append(f"TE={te}ms")
+            if seq_parts:
+                print(f"{pad}{b('Sequence:')} {' | '.join(seq_parts)}")
 
-            # Technical details section if requested
-            if detail and full:
-                print("\n" + safe_colored("=== Detailed Information ===", 'cyan', attrs=['bold']))
+            # Extra block: Important DICOM tags
+            important_map = {
+                'BitsAllocated': 'bits_allocated',
+                'BitsStored': 'bits_stored',
+                'HighBit': 'high_bit',
+                'SamplesPerPixel': 'samples_per_pixel',
+                'PixelRepresentation': 'pixel_representation',
+                'PlanarConfiguration': 'planar_configuration',
+                'RescaleIntercept': 'rescale_intercept',
+                'RescaleSlope': 'rescale_slope',
+                'RescaleType': 'rescale_type',
+                'PixelSpacing': 'pixel_spacing',
+                'Rows': 'rows',
+                'Columns': 'columns',
+                'SliceThickness': 'slice_thickness',
+                'SpacingBetweenSlices': 'spacing_between_slices',
+                'ImageOrientationPatient': 'image_orientation_patient',
+                'ImagePositionPatient': 'image_position_patient',
+                'InstanceNumber': 'instance_number',
+                'FrameOfReferenceUID': 'frame_of_reference_uid',
+                'SOPClassUID': 'sop_class_uid',
+                'SOPInstanceUID': 'sop_instance_uid',
+                'StudyInstanceUID': 'study_instance_uid',
+                'TransferSyntaxUID': 'transfer_syntax_uid',
+            }
+            def _short(v: object) -> str:
+                s = str(v)
+                # Keep columns tidy: aggressively shorten long values (e.g., UIDs)
+                if len(s) > 36:
+                    return s[:36] + '…'
+                return s
 
-                # Scanner details
-                if station:
-                    print(safe_colored("Scanner:", 'cyan', attrs=['bold']), station)
+            present_pairs: list[tuple[str, str]] = []
+            for label, key in important_map.items():
+                try:
+                    val = full.get(key)
+                except Exception:
+                    val = None
+                if val not in (None, '', 'N/A'):
+                    present_pairs.append((label, _short(val)))
+            if present_pairs:
+                print()
+                print(pad + cc('--- Important DICOM Tags ---', 'cyan', ['bold']))
+                # Two-column bullet layout
+                col = 2
+                row: list[tuple[str, str]] = []
+                def fmt_pair(k: str, v: str) -> str:
+                    return f"{cc('•', 'white')} {cc(k + ':', 'cyan')} {cc(v, 'white')}"
+                for pair in present_pairs:
+                    row.append(pair)
+                    if len(row) == col:
+                        left = fmt_pair(*row[0])
+                        right = fmt_pair(*row[1])
+                        print(pad + '  ' + left.ljust(60) + '  ' + right)
+                        row = []
+                if row:
+                    print(pad + '  ' + fmt_pair(*row[0]))
 
-                # Image specifics with value validation
-                rows = str(full.get('rows', 'N/A'))
-                cols = str(full.get('columns', 'N/A'))
-                bits = str(full.get('bits_allocated', 'N/A'))
-                series = str(full.get('series_number', '1'))
-                acq = str(full.get('acquisition_number', '1'))
-                print(
-                    safe_colored("Image:", 'cyan', attrs=['bold']),
-                    f"{rows}×{cols}px, {bits}-bit, Series #{series}, Acq #{acq}",
-                )
+            phi_tags = full.get('phi_tags', [])
+            if phi_tags:
+                print()
+                print(f"{cc('⚠ PHI Warning:', 'red', ['bold'])} {cc(', '.join(map(str, phi_tags)), 'red')}")
 
-                # Advanced parameters
-                tr = full.get('repetition_time', '')
-                te = full.get('echo_time', '')
-                if tr or te:
-                    params = []
-                    if tr:
-                        params.append(f"TR={tr}ms")
-                    if te:
-                        params.append(f"TE={te}ms")
-                    print(safe_colored("Sequence:", 'cyan', attrs=['bold']), ", ".join(params))
-
-                # Protocol details
-                protocol = full.get('protocol_name', '')
-                if protocol:
-                    print(safe_colored("Protocol:", 'cyan', attrs=['bold']), protocol)
-
-                # PHI warnings at the end for visibility
-                phi = stat.get('phi_flags', [])
-                if phi:
-                    print(
-                        "\n" + safe_colored("⚠ PHI Warning:", 'red', attrs=['bold']),
-                        safe_colored(", ".join(phi), 'red'),
-                    )
-        else:
-            # Clean fallback without colors
-            status = 'URGENT' if urgent else 'OK'
-            print(f"[{status}] {age} | {sex} — {modality} {body} — {dt}")
-
-            if study_desc or series_desc:
-                desc_parts: list[str] = []
-                if study_desc:
-                    desc_parts.append(f"Study: {study_desc}")
-                if series_desc:
-                    desc_parts.append(f"Series: {series_desc}")
-                print("  " + " / ".join(desc_parts))
-
-            if accession or study_id:
-                id_parts: list[str] = []
-                if accession:
-                    id_parts.append(f"ACC#{accession}")
-                if study_id:
-                    id_parts.append(f"Study#{study_id}")
-                print("  " + " ".join(id_parts))
-
-            if urgent and reasons:
-                print("  Alert:", ', '.join(reasons))
-
-            if detail and full:
-                print("\n=== Detailed Information ===")
-                if station:
-                    print("Scanner:", station)
-
-                rows = str(full.get('rows', 'N/A'))
-                cols = str(full.get('columns', 'N/A'))
-                bits = str(full.get('bits_allocated', 'N/A'))
-                series = str(full.get('series_number', '1'))
-                acq = str(full.get('acquisition_number', '1'))
-                print(f"Image: {rows}×{cols}px, {bits}-bit, Series #{series}, Acq #{acq}")
-
-                tr = full.get('repetition_time', '')
-                te = full.get('echo_time', '')
-                if tr or te:
-                    params = []
-                    if tr:
-                        params.append(f"TR={tr}ms")
-                    if te:
-                        params.append(f"TE={te}ms")
-                    print("Sequence:", ", ".join(params))
-
-                protocol = full.get('protocol_name', '')
-                if protocol:
-                    print("Protocol:", protocol)
-
-                phi = stat.get('phi_flags', [])
-                if phi:
-                    print("\nPHI Warning:", ", ".join(phi))
-                print('  Reasons: ' + ', '.join(reasons))
+        # Don't spam INFO logs with duplicative STAT; use debug for traceability
+        logging.debug('STAT: %s | %s | %s %s | %s', age, sex, modality, body, dt_display)
 
     except Exception as e:
-        logging.debug('pretty_print_stat failed: %s', e)
-        # Fall back to basic logging format
-        logging.info('STAT: %s | %s | %s %s | %s', age, sex, modality, body, dt)
+        logging.error("Error formatting STAT output: %s", e)
+        logging.debug(traceback.format_exc())
 
 
 # --------------------------- dependency checking --------------------------
@@ -813,7 +989,7 @@ def check_dependencies() -> dict[str, bool]:
 # ----------------------------- utility funcs -----------------------------
 
 
-def md5_short(s: str, n=8) -> str:
+def md5_short(s: str, n: int = 8) -> str:
     return hashlib.md5(s.encode('utf-8')).hexdigest()[:n]
 
 
@@ -1295,6 +1471,7 @@ def get_dicom_metadata_from_ds(ds: DicomDataset, file_path: str) -> dict[str, An
         }
         full_report = {
             "manufacturer": str(ds.get('Manufacturer', 'N/A')),
+            "manufacturer_model_name": str(ds.get('ManufacturerModelName', ds.get('ManufacturerModelName', 'N/A'))),
             "model": str(ds.get('ManufacturerModelName', 'N/A')),
             "software_versions": ds.get('SoftwareVersions', 'N/A'),
             "magnetic_field_strength": ds.get('MagneticFieldStrength', 'N/A'),
@@ -1302,12 +1479,60 @@ def get_dicom_metadata_from_ds(ds: DicomDataset, file_path: str) -> dict[str, An
             "pixel_spacing": ds.get('PixelSpacing', 'N/A'),
             "rows": ds.get('Rows', 'N/A'),
             "columns": ds.get('Columns', 'N/A'),
+            "bits_allocated": ds.get('BitsAllocated', 'N/A'),
             "photometric_interpretation": ds.get('PhotometricInterpretation', 'N/A'),
             "study_instance_uid": ds.get('StudyInstanceUID', 'N/A'),
             "series_instance_uid": ds.get('SeriesInstanceUID', 'N/A'),
             "transfer_syntax_uid": str(getattr(ds.file_meta, 'TransferSyntaxUID', 'N/A')),
             "number_of_frames": getattr(ds, 'NumberOfFrames', 'N/A'),
             "accession_number": ds.get('AccessionNumber', 'N/A'),
+            "study_id": ds.get('StudyID', 'N/A'),
+            # sequence/series
+            "series_number": ds.get('SeriesNumber', 'N/A'),
+            "acquisition_number": ds.get('AcquisitionNumber', 'N/A'),
+            "repetition_time": ds.get('RepetitionTime', ''),
+            "echo_time": ds.get('EchoTime', ''),
+            # time breakdown for nicer formatting
+            "study_date": ds.get('StudyDate', None),
+            "study_time": ds.get('StudyTime', None),
+            # site/device/personnel
+            "station_name": ds.get('StationName', ''),
+            "institution_name": ds.get('InstitutionName', ''),
+            "referring_physician_name": ds.get('ReferringPhysicianName', ''),
+            "referring_physician_address": ds.get('ReferringPhysicianAddress', ''),
+            "referring_physician_phone": ds.get('ReferringPhysicianTelephoneNumbers', ''),
+            "referring_physician_identification_sequence": ds.get('ReferringPhysicianIdentificationSequence', None),
+            "performing_physician_name": ds.get('PerformingPhysicianName', ''),
+            "performing_physician_identification_sequence": ds.get('PerformingPhysicianIdentificationSequence', None),
+            "physicians_of_record": ds.get('PhysiciansOfRecord', ''),
+            "physicians_of_record_identification_sequence": ds.get('PhysiciansOfRecordIdentificationSequence', None),
+            "reading_physicians": ds.get('NameOfPhysiciansReadingStudy', ''),
+            "reading_physicians_identification_sequence": ds.get('PhysiciansReadingStudyIdentificationSequence', None),
+            "requesting_physician": ds.get('RequestingPhysician', ''),
+            "requesting_physician_identification_sequence": ds.get('RequestingPhysicianIdentificationSequence', None),
+            "consulting_physician_name": ds.get('ConsultingPhysicianName', ''),
+            "consulting_physician_identification_sequence": ds.get('ConsultingPhysicianIdentificationSequence', None),
+            "scheduled_performing_physician_name": ds.get("ScheduledPerformingPhysicianName", ''),
+            "scheduled_performing_physician_identification_sequence": ds.get('ScheduledPerformingPhysicianIdentificationSequence', None),
+            "physician_approving_interpretation": ds.get('PhysicianApprovingInterpretation', ''),
+            # heuristic for attending
+            "attending_physician_name": ds.get('AttendingPhysicianName', ds.get('PerformingPhysicianName', '')),
+            # patient & study extras (snake_case)
+            "patient_name": ds.get('PatientName', ''),
+            "patient_id": ds.get('PatientID', ''),
+            "patient_birth_date": ds.get('PatientBirthDate', ''),
+            "patient_birth_time": ds.get('PatientBirthTime', ''),
+            "patient_address": ds.get('PatientAddress', ''),
+            "other_patient_ids": ds.get('OtherPatientIDs', ''),
+            "other_patient_ids_sequence": ds.get('OtherPatientIDsSequence', None),
+            "other_patient_names": ds.get('OtherPatientNames', ''),
+            "operators_name": ds.get('OperatorsName', ''),
+            "station_name": ds.get('StationName', ''),
+            "institution_name": ds.get('InstitutionName', ''),
+            "accession_number": ds.get('AccessionNumber', ''),
+            "study_id": ds.get('StudyID', ''),
+            "series_description": ds.get('SeriesDescription', ''),
+            "study_comments": ds.get('StudyComments', ''),
         }
         phi_flags = check_phi(ds)
         urgent, reasons = is_urgent(ds)
@@ -1941,7 +2166,7 @@ def main():
     args = parser.parse_args()
 
     if args.version:
-        print(f"dicom_tool.py version {__version__}")
+        print(f"dicomaster version {__version__}")
         return
 
     configure_logging(args.quiet, args.verbose, args.log_file)
