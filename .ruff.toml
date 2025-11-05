@@ -1,0 +1,4 @@
+[tool.ruff]
+line-length = 200
+extend-ignore = ["E501", "W293"]
+target-version = "py310"
