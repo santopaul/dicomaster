@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.9.3 — 2025-11-05
+
+Patch:
+- Ensure colorful STAT headline renders for --detail and --full (not just --minimal/default).
+- Keep minimal summary as default for single-file runs; --minimal remains a no-op alias.
+- No breaking changes; recommended patch upgrade.
+
 ## 0.9.2 — 2025-11-05
 
 Hotfix:

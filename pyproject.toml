@@ -1,10 +1,12 @@
 [build-system]
-requires = ["setuptools>=61.0", "wheel"]
+# Pin setuptools to <75 to avoid emitting newer Core Metadata fields (e.g., License-Expression)
+# that older Twine/pkginfo may flag as invalid during upload.
+requires = ["setuptools<75", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "dicomaster"
-version = "0.9.2"
+version = "0.9.3"
 description = "Secure DICOM Anonymizer & Batch Processor"
 readme = "README.md"
 requires-python = ">=3.9"
@@ -14,8 +16,7 @@ authors = [
 maintainers = [
     { name = "Santo Paul", email = "santopaul2005@gmail.com" }
 ]
-license = "MIT"
-license-files = ["LICENSE.txt"]
+license = { text = "MIT" }
 keywords = ["dicom", "anonymize", "medical-imaging", "pydicom", "healthcare", "radiology"]
 classifiers = [
     "Development Status :: 4 - Beta",
@@ -45,6 +46,7 @@ Documentation = "https://github.com/santopaul/dicomaster/blob/main/README.md"
 
 [tool.setuptools]
 py-modules = ["dicomaster"]
+license-files = ["LICENSE.txt"]
 
 [project.scripts]
 dicomaster = "dicomaster:main"

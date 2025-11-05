@@ -302,7 +302,7 @@ except Exception:
     Fore = Style = _Dummy()
 
 # Constants
-__version__ = "0.9.0"
+__version__ = "0.9.3"
 DEFAULT_THREADS = 4
 MAX_THREAD_CAP = 64
 CRITICAL_KEYS = {
@@ -1714,10 +1714,13 @@ def process_and_save(
             and not getattr(args, 'full', False)
             and not getattr(args, 'batch', False)
         )
-        # If user requested the minimal STAT view, or default applies, render pretty summary
-        show_stat = (getattr(args, 'minimal', False) or default_pretty) and not getattr(
-            args, 'quiet', False
-        )
+        # If user requested minimal/detail/full (or default applies), render pretty summary
+        show_stat = (
+            getattr(args, 'minimal', False)
+            or default_pretty
+            or getattr(args, 'detail', False)
+            or getattr(args, 'full', False)
+        ) and not getattr(args, 'quiet', False)
         if show_stat:
             try:
                 # Pass both the stat summary and full metadata for detailed views
