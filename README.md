@@ -34,7 +34,7 @@ Windows (PowerShell):
 
 ```powershell
 python -m venv .dicomaster
-.\.dicomaster\Scripts\Activate.ps1
+\.\.dicomaster\Scripts\Activate.ps1
 python -m pip install -U pip
 pip install -e .[full]
 ```
@@ -46,6 +46,12 @@ pip install -e .
 ```
 
 ## Quick examples
+
+Single file — colorful STAT (default):
+
+```powershell
+dicomaster .\path\to\file.dcm
+```
 
 Single file metadata + thumbnail:
 
@@ -66,6 +72,10 @@ dicomaster /studies -o fhir --batch --remove-private-tags
 ```
 
 Use `dicomaster --help` for the full set of options and flags.
+
+## Changelog
+
+See `CHANGELOG.md` for release highlights.
 
 ## Developer notes
 
