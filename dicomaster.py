@@ -112,6 +112,19 @@ if TYPE_CHECKING:
         def pixel_array(self) -> NDArray: ...
         def __getitem__(self, key: str) -> Any: ...
         def __setitem__(self, key: str, value: Any) -> None: ...
+        def get(self, key: str, default: Any | None = None) -> Any: ...
+        @property
+        def file_meta(self) -> Any: ...
+
+# Provide runtime aliases for protocol types used in casts/annotations so imports don't fail
+if not TYPE_CHECKING:
+    from typing import Any as _Any
+    PILImage = _Any  # type: ignore[misc,assignment]
+    PILDraw = _Any  # type: ignore[misc,assignment]
+    PILFont = _Any  # type: ignore[misc,assignment]
+    NDArray = _Any  # type: ignore[misc,assignment]
+    NumPyModule = _Any  # type: ignore[misc,assignment]
+    DicomDataset = _Any  # type: ignore[misc,assignment]
 
 
 class DicomModule(Protocol):
@@ -166,12 +179,11 @@ except ImportError:
     pass
 
 try:
-    import numpy as np
-
-    np = cast(NumPyModule, np)
+    import numpy as np  # type: ignore[no-redef]
     has_numpy = True
 except ImportError:
-    pass
+    np = None  # type: ignore[assignment]
+    has_numpy = False
 
 # Type aliases for clarity
 StrDict = dict[str, str]
