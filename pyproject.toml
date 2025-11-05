@@ -31,7 +31,7 @@ classifiers = [
 ]
 
 dependencies = [
-    "pydicom>=2.3.0",
+    "pydicom>=3.0.1",
     "colorama>=0.4.6",
 ]
 
@@ -50,12 +50,12 @@ dicomaster = "dicomaster:main"
 
 [project.optional-dependencies]
 full = [
-    "cryptography>=41.0.0",
+    "cryptography>=46.0.3",
     "pandas>=2.0.0",
-    "Pillow>=10.0.0",
+    "Pillow>=12.0.0",
     "tqdm>=4.65.0",
     "python-dateutil>=2.8.2",
-    "numpy>=1.24.0",
+    "numpy>=2.3.4",
     "pyfiglet>=0.8.post1",
     "termcolor>=2.3.0",
     "pytest>=7.4.0",
@@ -63,13 +63,22 @@ full = [
     "mypy>=1.5.0",
     "ruff>=0.1.0",
     "build>=1.0.0",
-    "twine>=4.0.0"
+    "twine>=6.2.0"
 ]
 test = [
     "pytest>=7.4.0",
     "pytest-cov>=4.1.0",
     "mypy>=1.5.0",
     "ruff>=0.0.290",
+]
+dev = [
+    "black>=24.3.0",
+    "ruff>=0.6.0",
+    "isort>=5.13.0",
+    "pytest>=7.4.0",
+    "pytest-cov>=4.1.0",
+    "mypy>=1.5.0",
+    "pre-commit>=3.7.0"
 ]
 
 [tool.pytest.ini_options]
@@ -95,10 +104,26 @@ plugins = ["numpy.typing.mypy_plugin"]
 [tool.ruff]
 select = ["E", "F", "W", "I", "N", "B", "SIM", "UP"]
 ignore = []
-line-length = 100
+line-length = 200
+extend-ignore = ["E501", "E701", "E702", "E402"]
+target-version = "py310"
+fix = true
+src = ["dicomaster"]
 exclude = [
     ".git",
     "__pycache__",
     "build",
     "dist",
 ]
+
+
+[tool.black]
+line-length = 100
+target-version = ['py39', 'py310', 'py311']
+skip-string-normalization = true
+
+[tool.isort]
+profile = "black"
+line_length = 100
+multi_line_output = 3
+include_trailing_comma = true

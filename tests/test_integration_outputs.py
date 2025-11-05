@@ -53,7 +53,9 @@ def test_process_generates_outputs_and_map(tmp_path: Path):
         quiet=False,
     )
 
-    res = process_and_save(str(dcm_path), args, outputs_map, amap, dry_run=False, suppress_details=False)
+    res = process_and_save(
+        str(dcm_path), args, outputs_map, amap, dry_run=False, suppress_details=False
+    )
     assert res is not None
 
     # JSON metadata file should be created
@@ -70,4 +72,7 @@ def test_process_generates_outputs_and_map(tmp_path: Path):
 
     assert isinstance(amap_data, dict)
     # map should reference the original file path or contain entries
-    assert any('INT123' in str(v) or isinstance(v, dict) for v in amap_data.values()) or len(amap_data) >= 0
+    assert (
+        any('INT123' in str(v) or isinstance(v, dict) for v in amap_data.values())
+        or len(amap_data) >= 0
+    )
