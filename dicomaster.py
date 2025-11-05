@@ -681,12 +681,14 @@ def pretty_print_stat(
             time_str = (full.get('study_time') or stat.get('study_time') or None)  # type: ignore[assignment]
         try:
             if date_str:
-                fmt, _future, dt_obj = format_dicom_datetime(date_str, time_str)  # type: ignore[misc]
+                fmt, future, dt_obj = format_dicom_datetime(date_str, time_str)  # type: ignore[misc]
+                # We'll recompute relative text so we can control 'in' vs 'ago' formatting
                 dt_display = fmt
                 if dt_obj is not None:
-                    rel = human_readable_delta(dt_obj)
+                    now_ref = datetime.now()
+                    rel = human_readable_delta(dt_obj, now_ref)
                     if rel and rel != 'just now':
-                        rel_text = f" ({rel} ago)"
+                        rel_text = f" (in {rel})" if future else f" ({rel} ago)"
         except Exception:
             # Fallback to whatever stat provided
             pass
