@@ -1,14 +1,14 @@
 """Test color banner and STAT output."""
 
+import argparse
+import sys
 from contextlib import contextmanager
 from io import StringIO
-import sys
-import argparse
 from typing import Any
 
 import pytest
 
-from dicomaster import show_banner, pretty_print_stat
+from dicomaster import pretty_print_stat, show_banner
 
 
 @contextmanager
@@ -60,10 +60,10 @@ def test_pretty_print_stat(color: bool):
         'urgent_reasons': []
     }
     full: dict[str, Any] = {}
-    
+
     with captured_output() as out:
         pretty_print_stat(stat, full=full, color=color)
-    
+
     output = out.getvalue().strip()
     assert '45Y' in output
     assert 'M' in output
@@ -84,10 +84,10 @@ def test_pretty_print_stat_urgent():
         'urgent_reasons': ['Contrast reaction', 'Critical finding']
     }
     full: dict[str, Any] = {}
-    
+
     with captured_output() as out:
         pretty_print_stat(stat, full=full)
-    
+
     output = out.getvalue().strip()
     assert '[URGENT]' in output
     assert 'Contrast reaction' in output
@@ -98,10 +98,10 @@ def test_pretty_print_stat_handles_missing():
     """Test pretty stat printing gracefully handles missing fields."""
     stat: dict[str, Any] = {}
     full: dict[str, Any] = {}
-    
+
     with captured_output() as out:
         pretty_print_stat(stat, full=full)
-    
+
     output = out.getvalue().strip()
     assert 'N/A' in output
     assert '[OK]' in output  # Default non-urgent

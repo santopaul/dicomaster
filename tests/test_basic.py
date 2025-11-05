@@ -5,7 +5,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from dicomaster import pseudonymize_value, apply_anonymization_to_sanitized
+from dicomaster import apply_anonymization_to_sanitized, pseudonymize_value
 
 
 def test_pseudonymize_value_returns_token_and_salt():

@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
 """Generate an anonymized test DICOM file for unit testing."""
-from pathlib import Path
 import numpy as np
 from pydicom.dataset import Dataset, FileDataset
 

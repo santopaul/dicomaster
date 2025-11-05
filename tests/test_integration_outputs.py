@@ -13,6 +13,7 @@ except Exception:
     pytest.skip("pydicom required for this integration test", allow_module_level=True)
 
 from argparse import Namespace
+
 from dicomaster import process_and_save
 
 
@@ -64,7 +65,7 @@ def test_process_generates_outputs_and_map(tmp_path: Path):
     amap_data = None
     import json
 
-    with open(anon_map_file, 'r', encoding='utf-8') as f:
+    with open(anon_map_file, encoding='utf-8') as f:
         amap_data = json.load(f)
 
     assert isinstance(amap_data, dict)

@@ -20,25 +20,147 @@ Usage: see argparse help (``python dicom_tool.py -h``)
 """
 
 from __future__ import annotations
+
 import argparse
-import os
-import sys
-import json
+import base64
 import csv
 import hashlib
-import traceback
-import logging
 import hmac
+import json
+import logging
+import os
 import secrets
-import base64
-from concurrent.futures import ThreadPoolExecutor, as_completed
-import threading
-from datetime import datetime
-from typing import Any, Dict, Iterable, List, Optional, Tuple, Union, cast
-from pathlib import Path
 import sys
-from types import ModuleType
-import argparse  # For type hints
+import threading
+import traceback
+from collections.abc import Iterable
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from datetime import datetime
+from pathlib import Path
+from typing import (
+    Any, Dict, List, Optional, Tuple, TypeAlias, 
+    Protocol, TypeVar, cast, Union, TYPE_CHECKING
+)
+
+# Type variables for generic use
+T = TypeVar('T')
+T_co = TypeVar('T_co', covariant=True) 
+
+# Define runtime types for imports
+PILImage = Any  
+PILDraw = Any
+PILFont = Any
+NDArray = Any
+DicomDataset = Any  
+NumPyModule = Any
+
+# Runtime module references  
+np: Optional[NumPyModule] = None
+pillow: Optional[Any] = None 
+pydicom: Optional[Any] = None
+
+if TYPE_CHECKING:
+    # Protocol definitions for type checking
+    class PILImage(Protocol):
+        """PIL Image protocol"""
+        def save(self, fp: str, format: Optional[str] = None) -> None: ...
+        def paste(self, im: 'PILImage', box: tuple[int, int]) -> None: ...
+        def thumbnail(self, size: tuple[int, int]) -> None: ...
+
+    class PILDraw(Protocol):
+        """PIL ImageDraw protocol""" 
+        def text(self, xy: tuple[int, int], text: str,
+                fill: Optional[str] = None, 
+                font: Optional[PILFont] = None) -> None: ...
+
+    class PILFont(Protocol):
+        """PIL ImageFont protocol"""
+        def getsize(self, text: str) -> tuple[int, int]: ...
+
+    class NDArray(Protocol):
+        """NumPy array protocol"""
+        @property
+        def ndim(self) -> int: ...
+        @property
+        def shape(self) -> tuple[int, ...]: ...
+        @property
+        def dtype(self) -> Any: ...
+        def __getitem__(self, key: Union[int, slice]) -> 'NDArray': ...
+        def __len__(self) -> int: ...
+        def astype(self, dtype: Any) -> 'NDArray': ...
+        def __mul__(self, other: Union[int, float]) -> 'NDArray': ...
+        def min(self) -> Union[int, float]: ...
+        def max(self) -> Union[int, float]: ...
+        def __sub__(self, other: Union[int, float]) -> 'NDArray': ...
+        def __truediv__(self, other: Union[int, float]) -> 'NDArray': ...
+
+    class NumPyModule(Protocol):
+        """NumPy module protocol"""
+        @property
+        def uint8(self) -> Any: ...
+        def asarray(self, array: Any) -> NDArray: ...
+
+    class DicomDataset(Protocol):
+        """DICOM dataset protocol"""
+        @property
+        def pixel_array(self) -> NDArray: ...
+        def __getitem__(self, key: str) -> Any: ...
+        def __setitem__(self, key: str, value: Any) -> None: ...
+    def pixel_array(self) -> NDArrayProto: ...
+    def __getitem__(self, key: str) -> Any: ...
+    def __setitem__(self, key: str, value: Any) -> None: ...
+
+class DicomModule(Protocol):
+    """Protocol for pydicom module interface"""
+    def dcmread(self, fp: str, force: bool = ...) -> DicomDataset: ...
+    def dcmwrite(self, filename: str, dataset: DicomDataset) -> None: ...
+
+class ImageModule(Protocol):
+    """Protocol for PIL.Image module interface"""
+    def open(self, fp: str, mode: str = ...) -> PILImage: ...
+    def new(self, mode: str, size: tuple[int, int], color: str = ...) -> PILImage: ...
+
+class ImageDrawModule(Protocol):
+    """Protocol for PIL.ImageDraw module interface"""
+    def Draw(self, image: PILImage) -> PILDraw: ...
+
+class ImageFontModule(Protocol): 
+    """Protocol for PIL.ImageFont module interface"""
+    def truetype(self, font: str, size: int) -> PILFont: ...
+
+# Initialize module-level variables with protocol types
+np: Optional[NumPyModule] = None
+pil_image: Optional[ImageModule] = None
+pil_draw: Optional[ImageDrawModule] = None
+pil_font: Optional[ImageFontModule] = None
+pydicom_module: Optional[DicomModule] = None
+
+# Initialize availability flags
+has_pil = False
+has_numpy = False
+has_pydicom = False
+has_pyfiglet = False
+has_cryptography = False
+
+# Import optional dependencies
+try:
+    from PIL import Image, ImageDraw, ImageFont
+    pil_image = cast(ImageModule, Image)
+    pil_draw = cast(ImageDrawModule, ImageDraw)
+    pil_font = cast(ImageFontModule, ImageFont)
+    has_pil = True
+except ImportError:
+    pass
+
+try:
+    import numpy as np
+    np = cast(NumPyModule, np)
+    has_numpy = True
+except ImportError:
+    pass
+except ImportError:
+    _NP_AVAILABLE = False
+    NDArray = Any  # For type checking
 
 # Type aliases for clarity
 StrDict = dict[str, str]
@@ -46,8 +168,8 @@ AnyDict = dict[str, Any]
 
 try:
     import pydicom
-    from pydicom.errors import InvalidDicomError
     from pydicom.dataset import Dataset as PyDicomDataset  # For type hints
+    from pydicom.errors import InvalidDicomError
     _PYDICOM_AVAILABLE = True
 except ImportError:
     pydicom = None  # type: ignore
@@ -58,11 +180,11 @@ except ImportError:
 # Banner/color dependencies
 try:
     import pyfiglet
-    from termcolor import colored
     from termcolor import COLORS as TERM_COLORS
+    from termcolor import colored
     _BANNER_AVAILABLE = True
-    
-    def safe_colored(text: str, color: Optional[str] = None, on_color: Optional[str] = None, 
+
+    def safe_colored(text: str, color: Optional[str] = None, on_color: Optional[str] = None,
                     attrs: Optional[List[str]] = None) -> str:
         """Type-safe wrapper for termcolor.colored that handles missing deps gracefully.
         
@@ -85,9 +207,9 @@ try:
 except ImportError:
     _BANNER_AVAILABLE = False
     TERM_COLORS = frozenset()  # type: ignore
-    
-    def safe_colored(text: str, color: Optional[str] = None, on_color: Optional[str] = None,
-                    attrs: Optional[List[str]] = None) -> str:
+
+    def safe_colored(text: str, color: str | None = None, on_color: str | None = None,
+                    attrs: list[str] | None = None) -> str:
         """Fallback when termcolor not available."""
         return text
 
@@ -120,8 +242,8 @@ except Exception:
 # cryptography optional for PBKDF2
 _CRYPTO_AVAILABLE = False
 try:
-    from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
     from cryptography.hazmat.primitives import hashes
+    from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
     _CRYPTO_AVAILABLE = True
 except Exception:
     _CRYPTO_AVAILABLE = False
@@ -137,7 +259,8 @@ except ImportError:
 
 # colorama optional for colored logs (non-critical)
 try:
-    from colorama import Fore, Style, init as colorama_init
+    from colorama import Fore, Style
+    from colorama import init as colorama_init
     colorama_init(autoreset=True)
 except Exception:
     class _Dummy:
@@ -263,7 +386,7 @@ def show_banner(args: argparse.Namespace) -> None:
             # Use custom fonts and colors if pyfiglet/termcolor available
             banner_lines: List[str] = []
             banner_text = ''
-            
+
             # Main title with shadow effect
             for font in ['big', 'standard']:
                 try:
@@ -273,23 +396,23 @@ def show_banner(args: argparse.Namespace) -> None:
                         break
                 except Exception:
                     continue
-            
+
             if not banner_text:  # Fallback to default font
                 try:
                     banner_text = pyfiglet.figlet_format('DICOMASTER')
                 except Exception:
                     banner_text = 'Dicomaster'  # Plain text fallback
-            
+
             # Apply gradients and effects
             colored_banner = safe_colored(banner_text, 'green', attrs=['bold'])
             banner_lines.append(colored_banner)
-            
+
             # Metadata line with author attribution
             author = safe_colored(name, 'yellow', attrs=['bold'])
             version = safe_colored(f'v{__version__}', 'cyan', attrs=['bold'])
             description = safe_colored('Secure DICOM Anonymizer & Batch Processor', 'white', attrs=['bold'])
             banner_lines.append(f"{version} — {description} by {author}")
-            
+
             # Print composed banner
             print('\n'.join(banner_lines))
             return
@@ -301,7 +424,7 @@ def show_banner(args: argparse.Namespace) -> None:
     print(f"*** Dicomaster v{__version__} — Secure DICOM Anonymizer & Batch Processor by {name} ***")
 
 
-def pretty_print_stat(stat: Dict[str, Any], full: Optional[Dict[str, Any]] = None, color: bool = True, detail: bool = False) -> None:
+def pretty_print_stat(stat: dict[str, Any], full: dict[str, Any] | None = None, color: bool = True, detail: bool = False) -> None:
     """Print a compact, colorful STAT summary to stdout with optional detailed view.
 
     Args:
@@ -334,7 +457,7 @@ def pretty_print_stat(stat: Dict[str, Any], full: Optional[Dict[str, Any]] = Non
         dt = str(stat.get('study_date_time', 'N/A'))
         urgent = bool(stat.get('urgent', False))
         reasons = list(map(str, stat.get('urgent_reasons', []))) or []
-        
+
         # Additional summary fields
         study_desc = str(stat.get('study_description', ''))
         series_desc = str(stat.get('series_description', ''))
@@ -346,19 +469,19 @@ def pretty_print_stat(stat: Dict[str, Any], full: Optional[Dict[str, Any]] = Non
             # Color-coded summary with visual hierarchy
             status_color = 'red' if urgent else 'green'
             status_text = safe_colored('URGENT', status_color, attrs=['bold', 'blink']) if urgent else safe_colored('OK', status_color)
-            
+
             # Patient demographics (yellow)
             left = safe_colored(f"{age} | {sex}", 'yellow', attrs=['bold'])
-            
+
             # Modality info (cyan with bold modality)
             mid = safe_colored(modality, 'cyan', attrs=['bold']) + safe_colored(f" {body}", 'cyan')
-            
+
             # Study time (green)
             right = safe_colored(dt, 'green')
-            
+
             # Main summary line
             print(f"[{status_text}] {left} — {mid} — {right}")
-            
+
             # Study descriptions if available
             if study_desc or series_desc:
                 desc = safe_colored('Study:', 'white', attrs=['bold'])
@@ -367,7 +490,7 @@ def pretty_print_stat(stat: Dict[str, Any], full: Optional[Dict[str, Any]] = Non
                 if series_desc:
                     desc += ' / ' + safe_colored(series_desc, 'white')
                 print(f"  {desc}")
-            
+
             # Study identifiers
             if accession or study_id:
                 ids = safe_colored('IDs:', 'white', attrs=['bold'])
@@ -376,7 +499,7 @@ def pretty_print_stat(stat: Dict[str, Any], full: Optional[Dict[str, Any]] = Non
                 if study_id:
                     ids += ' Study#' + safe_colored(study_id, 'white')
                 print(f"  {ids}")
-            
+
             # Urgent reasons in red if present
             if urgent and reasons:
                 reasons_text = safe_colored('  Alert:', 'red', attrs=['bold'])
@@ -386,20 +509,20 @@ def pretty_print_stat(stat: Dict[str, Any], full: Optional[Dict[str, Any]] = Non
             # Technical details section if requested
             if detail and full:
                 print("\n" + safe_colored("=== Detailed Information ===", 'cyan', attrs=['bold']))
-                
+
                 # Scanner details
                 if station:
                     print(safe_colored("Scanner:", 'cyan', attrs=['bold']), station)
-                
+
                 # Image specifics with value validation
                 rows = str(full.get('rows', 'N/A'))
                 cols = str(full.get('columns', 'N/A'))
                 bits = str(full.get('bits_allocated', 'N/A'))
                 series = str(full.get('series_number', '1'))
                 acq = str(full.get('acquisition_number', '1'))
-                print(safe_colored("Image:", 'cyan', attrs=['bold']), 
+                print(safe_colored("Image:", 'cyan', attrs=['bold']),
                       f"{rows}×{cols}px, {bits}-bit, Series #{series}, Acq #{acq}")
-                
+
                 # Advanced parameters
                 tr = full.get('repetition_time', '')
                 te = full.get('echo_time', '')
@@ -407,24 +530,24 @@ def pretty_print_stat(stat: Dict[str, Any], full: Optional[Dict[str, Any]] = Non
                     params = []
                     if tr: params.append(f"TR={tr}ms")
                     if te: params.append(f"TE={te}ms")
-                    print(safe_colored("Sequence:", 'cyan', attrs=['bold']), 
+                    print(safe_colored("Sequence:", 'cyan', attrs=['bold']),
                           ", ".join(params))
-                
+
                 # Protocol details
                 protocol = full.get('protocol_name', '')
                 if protocol:
                     print(safe_colored("Protocol:", 'cyan', attrs=['bold']), protocol)
-                
+
                 # PHI warnings at the end for visibility
                 phi = stat.get('phi_flags', [])
                 if phi:
-                    print("\n" + safe_colored("⚠ PHI Warning:", 'red', attrs=['bold']), 
+                    print("\n" + safe_colored("⚠ PHI Warning:", 'red', attrs=['bold']),
                           safe_colored(", ".join(phi), 'red'))
         else:
             # Clean fallback without colors
             status = 'URGENT' if urgent else 'OK'
             print(f"[{status}] {age} | {sex} — {modality} {body} — {dt}")
-            
+
             if study_desc or series_desc:
                 desc_parts: list[str] = []
                 if study_desc:
@@ -432,7 +555,7 @@ def pretty_print_stat(stat: Dict[str, Any], full: Optional[Dict[str, Any]] = Non
                 if series_desc:
                     desc_parts.append(f"Series: {series_desc}")
                 print("  " + " / ".join(desc_parts))
-            
+
             if accession or study_id:
                 id_parts: list[str] = []
                 if accession:
@@ -440,22 +563,22 @@ def pretty_print_stat(stat: Dict[str, Any], full: Optional[Dict[str, Any]] = Non
                 if study_id:
                     id_parts.append(f"Study#{study_id}")
                 print("  " + " ".join(id_parts))
-            
+
             if urgent and reasons:
                 print("  Alert:", ', '.join(reasons))
-            
+
             if detail and full:
                 print("\n=== Detailed Information ===")
                 if station:
                     print("Scanner:", station)
-                
+
                 rows = str(full.get('rows', 'N/A'))
                 cols = str(full.get('columns', 'N/A'))
                 bits = str(full.get('bits_allocated', 'N/A'))
                 series = str(full.get('series_number', '1'))
                 acq = str(full.get('acquisition_number', '1'))
                 print(f"Image: {rows}×{cols}px, {bits}-bit, Series #{series}, Acq #{acq}")
-                
+
                 tr = full.get('repetition_time', '')
                 te = full.get('echo_time', '')
                 if tr or te:
@@ -463,11 +586,11 @@ def pretty_print_stat(stat: Dict[str, Any], full: Optional[Dict[str, Any]] = Non
                     if tr: params.append(f"TR={tr}ms")
                     if te: params.append(f"TE={te}ms")
                     print("Sequence:", ", ".join(params))
-                
+
                 protocol = full.get('protocol_name', '')
                 if protocol:
                     print("Protocol:", protocol)
-                
+
                 phi = stat.get('phi_flags', [])
                 if phi:
                     print("\nPHI Warning:", ", ".join(phi))
@@ -536,7 +659,7 @@ def flatten_for_csv_row(value: Any) -> str:
 
 # ------------------------ date/time humanization -------------------------
 
-def parse_dicom_time_str(t: Optional[str]) -> Optional[datetime.time]:
+def parse_dicom_time_str(t: str | None) -> datetime.time | None:
     if not t:
         return None
     t = str(t).split('.')[0].ljust(6, '0')[:6]
@@ -603,7 +726,7 @@ def check_phi(ds: pydicom.dataset.Dataset) -> List[str]:
             phi.append(seq)
     return phi
 
-def list_private_tags(ds: pydicom.dataset.Dataset, show_values: bool=False) -> List[Dict[str, Any]]:
+def list_private_tags(ds: DicomDataset, show_values: bool=False) -> list[dict[str, Any]]:
     out: list[Dict[str, Any]] = []
     tags = sorted([t for t in ds.keys() if t.is_private], key=lambda x: (x.group, x.elem))
     for tag in tags:
@@ -638,11 +761,26 @@ def _pbkdf2_pseudonym(value: str, salt: bytes, iterations: int = 100000, length:
     token = base64.urlsafe_b64encode(key).decode('utf-8')[:16]
     return "anon_" + token
 
-def _hmac_pseudonym(value: str, salt: bytes) -> str:
-    hm = hmac.new(salt or b'default_salt', str(value).encode('utf-8'), hashlib.sha256).hexdigest()[:16]
-    return "anon_" + hm
+def _hmac_pseudonym(
+    value: str,
+    salt: bytes
+) -> str:
+    """Generate a pseudonym using HMAC with provided or default salt."""
+    salt_bytes = salt or b'default_salt'
+    value_bytes = str(value).encode('utf-8')
+    
+    # Generate HMAC of value using salt
+    hash_fn = hashlib.sha256
+    hm = hmac.new(
+        salt_bytes, 
+        value_bytes, 
+        hash_fn
+    ).hexdigest()[:16]
+    
+    # Prefix with "anon_" to make it clear this is a pseudonym
+    return f"anon_{hm}"
 
-def pseudonymize_value(value: Any, salt: Optional[str] = None) -> Tuple[Optional[str], str]:
+def pseudonymize_value(value: Any, salt: str | None = None) -> tuple[str | None, str]:
     """
     Returns (pseudonym, salt_hex_used).
     If salt was None, a random salt (bytes) is generated and its hex returned (but not logged verbatim).
@@ -659,7 +797,9 @@ def pseudonymize_value(value: Any, salt: Optional[str] = None) -> Tuple[Optional
         salt_hex = salt
         salt_bytes = salt.encode('utf-8')
         if _CRYPTO_AVAILABLE and salt and len(salt) < 8:
-            logging.warning('Provided salt is short (<8 chars); consider longer salt for better security')
+            logging.warning(
+                'Provided salt is short (<8 chars); consider longer salt for better security'
+            )
     try:
         if _CRYPTO_AVAILABLE:
             pseudo = _pbkdf2_pseudonym(v, salt_bytes)
@@ -671,7 +811,7 @@ def pseudonymize_value(value: Any, salt: Optional[str] = None) -> Tuple[Optional
         pseudo = _hmac_pseudonym(v, salt_bytes if salt_bytes else b'default_salt')
     return pseudo, salt_hex
 
-def apply_anonymization_to_sanitized(sanitized: Dict[str, Any], tags: List[str], mode: str, salt: Optional[str], run_mapping: Dict[str, Any], file_path: str) -> Tuple[Dict[str, Any], Dict[str, Any]]:
+def apply_anonymization_to_sanitized(sanitized: dict[str, Any], tags: list[str], mode: str, salt: str | None, run_mapping: dict[str, Any], file_path: str) -> tuple[dict[str, Any], dict[str, Any]]:
     """
     Modifies sanitized dict in-place. Returns sanitized and the per-file mapping.
     run_mapping is updated with run_mapping[file_path] = per_file_map
@@ -703,7 +843,7 @@ def apply_anonymization_to_sanitized(sanitized: Dict[str, Any], tags: List[str],
 
 # ----------------------- pixel extraction & thumbnails -------------------
 
-def save_pixel_images(ds: pydicom.dataset.Dataset, out_prefix: str, ext: str = '.png') -> List[str]:
+def save_pixel_images(ds: DicomDataset, out_prefix: str, ext: str = '.png') -> list[str]:
     saved = []
     if 'PixelData' not in ds:
         return saved
@@ -723,7 +863,13 @@ def save_pixel_images(ds: pydicom.dataset.Dataset, out_prefix: str, ext: str = '
     if np_arr.ndim == 2:
         frames = [np_arr]
     elif np_arr.ndim == 3:
-        if np_arr.shape[0] <= 64 and (np_arr.shape[1] > 4 and np_arr.shape[2] > 4):
+        # Check if shape makes sense for sequential frames
+        dims_ok = (
+            np_arr.shape[0] <= 64 and  # Reasonable number of frames
+            np_arr.shape[1] > 4 and    # Non-trivial dimensions
+            np_arr.shape[2] > 4
+        )
+        if dims_ok:
             frames = [np_arr[i] for i in range(np_arr.shape[0])]
         else:
             frames = [np_arr]
@@ -732,8 +878,17 @@ def save_pixel_images(ds: pydicom.dataset.Dataset, out_prefix: str, ext: str = '
     else:
         frames = [np_arr]
 
+    # Normalize extension format and get corresponding PIL format
     ext_l = ext.lower() if ext.startswith('.') else f".{ext.lower()}"
-    format_map = {'.png': 'PNG', '.jpg': 'JPEG', '.jpeg': 'JPEG', '.bmp': 'BMP', '.tiff': 'TIFF', '.tif': 'TIFF'}
+    
+    format_map = {
+        '.png': 'PNG',
+        '.jpg': 'JPEG', 
+        '.jpeg': 'JPEG',
+        '.bmp': 'BMP',
+        '.tiff': 'TIFF',
+        '.tif': 'TIFF'
+    }
     pil_format = format_map.get(ext_l, 'PNG')
 
     for idx, frame in enumerate(frames):
@@ -830,7 +985,7 @@ def compute_age_from_ds(ds: pydicom.dataset.Dataset) -> str:
             return "N/A"
     return "N/A"
 
-def is_urgent(ds: pydicom.dataset.Dataset) -> Tuple[bool, List[str]]:
+def is_urgent(ds: DicomDataset) -> tuple[bool, list[str]]:
     reasons: list[str] = []
     mod = str(ds.get("Modality", "")).upper()
     desc = str(ds.get("StudyDescription", "")).upper()
@@ -850,9 +1005,16 @@ def is_urgent(ds: pydicom.dataset.Dataset) -> Tuple[bool, List[str]]:
         pass
     return (len(reasons) > 0, reasons)
 
-def get_dicom_metadata_from_ds(ds: pydicom.dataset.Dataset, file_path: str) -> Dict[str, Any]:
+def get_dicom_metadata_from_ds(
+    ds: DicomDataset,
+    file_path: str
+) -> dict[str, Any]:
+    """Extract metadata from a DICOM dataset into a structured dictionary."""
     try:
-        study_dt_str, warn_future, dt_obj = format_dicom_datetime(ds.get('StudyDate', 'N/A'), ds.get('StudyTime', 'N/A'))
+        study_dt_str, warn_future, dt_obj = format_dicom_datetime(
+            ds.get('StudyDate', 'N/A'),
+            ds.get('StudyTime', 'N/A')
+        )
         stat_report = {
             "patient_id": str(ds.get('PatientID', 'N/A')),
             "patient_name": str(ds.get('PatientName', 'N/A')),
@@ -891,7 +1053,7 @@ def get_dicom_metadata_from_ds(ds: pydicom.dataset.Dataset, file_path: str) -> D
 
 # ----------------------- outputs & saving helpers ------------------------
 
-def parse_output_items(items: List[str], outdir: str) -> Dict[str, List[str]]:
+def parse_output_items(items: list[str], outdir: str) -> dict[str, list[str]]:
     outmap: Dict[str, List[str]] = {}
     outdir = Path(outdir)
     for raw in items:
@@ -925,7 +1087,7 @@ def parse_output_items(items: List[str], outdir: str) -> Dict[str, List[str]]:
 
 # -------------------------- find files (pathlib) -------------------------
 
-def find_dicom_files(root: str, max_depth: Optional[int] = None) -> List[str]:
+def find_dicom_files(root: str, max_depth: int | None = None) -> list[str]:
     rootp = Path(root)
     if not rootp.exists():
         return []
@@ -944,7 +1106,15 @@ def find_dicom_files(root: str, max_depth: Optional[int] = None) -> List[str]:
 
 # ----------------------- streaming aggregation helpers -------------------
 
-def stream_write_csv(rows_iter: Iterable[Dict[str, Any]], output_path: Path):
+def stream_write_csv(
+    rows_iter: Iterable[dict[str, Any]],
+    output_path: Path
+) -> None:
+    """Stream write dictionary rows to a CSV file.
+    
+    Each row is flattened before writing to handle nested structures.
+    Header is written from first row's keys.
+    """
     first = True
     flushed = 0
     with open(output_path, 'w', newline='', encoding='utf-8') as f:
@@ -975,9 +1145,9 @@ def stream_write_json(rows_iter: Iterable[dict[str, Any]], output_path: Path):
 
 # ------------------------------- processing --------------------------------
 
-def process_and_save(path: str, args: argparse.Namespace, outputs_map: dict[str, list[str]], 
-                  run_mapping: Dict[str, Any], dry_run: bool=False, 
-                  suppress_details: bool=False) -> Optional[Dict[str, Any]]:
+def process_and_save(path: str, args: argparse.Namespace, outputs_map: dict[str, list[str]],
+                  run_mapping: dict[str, Any], dry_run: bool=False,
+                  suppress_details: bool=False) -> dict[str, Any] | None:
     pathp = Path(path)
     try:
         ds = pydicom.dcmread(str(pathp), force=args.force)
@@ -1007,7 +1177,10 @@ def process_and_save(path: str, args: argparse.Namespace, outputs_map: dict[str,
 
     per_file_map = {}
     if args.anonymize:
-        tags_to_anon = DEFAULT_ANON_TAGS if not args.anonymize_tags else [t.strip() for t in args.anonymize_tags.split(',') if t.strip()]
+        if not args.anonymize_tags:
+            tags_to_anon = DEFAULT_ANON_TAGS
+        else:
+            tags_to_anon = [t.strip() for t in args.anonymize_tags.split(',') if t.strip()]
         sanitized, per_file_map = apply_anonymization_to_sanitized(sanitized, tags_to_anon, args.anonymize_mode, args.anonymize_salt, run_mapping, str(pathp.resolve()))
 
     if not args.batch or args.verbose > 0:
@@ -1022,7 +1195,7 @@ def process_and_save(path: str, args: argparse.Namespace, outputs_map: dict[str,
                     color=not getattr(args, 'quiet', False),
                     detail=getattr(args, 'detail', False) or getattr(args, 'full', False)
                 )
-                
+
                 # Additional full-mode metadata dump
                 if getattr(args, 'full', False):
                     print("\n=== Complete Metadata Dump ===")
@@ -1031,14 +1204,14 @@ def process_and_save(path: str, args: argparse.Namespace, outputs_map: dict[str,
                 logging.error('Failed to show detailed view: %s', e)
                 logging.debug(traceback.format_exc())
                 # Fall back to basic info logging
-                logging.info('STAT: %s | %s | %s %s | %s', 
-                           sanitized.get('patient_age','N/A'), 
+                logging.info('STAT: %s | %s | %s %s | %s',
+                           sanitized.get('patient_age','N/A'),
                            sanitized.get('patient_sex','N/A'),
                            sanitized.get('modality','N/A'),
                            sanitized.get('body_part_examined','N/A'),
                            sanitized.get('study_date_time','N/A'))
         else:
-            logging.info('STAT: %s | %s | %s %s | %s', 
+            logging.info('STAT: %s | %s | %s %s | %s',
                         sanitized.get('patient_age','N/A'),
                         sanitized.get('patient_sex','N/A'),
                         sanitized.get('modality','N/A'),
@@ -1092,10 +1265,15 @@ def process_and_save(path: str, args: argparse.Namespace, outputs_map: dict[str,
                             if sanitized:
                                 writer = csv.DictWriter(f, fieldnames=list(sanitized.keys()))
                                 writer.writeheader()
-                                writer.writerow({k: (json.dumps(v) if isinstance(v, (dict, list)) else v) for k,v in sanitized.items()})
-                        logging.info('Saved CSV -> %s', outpath)
-                except Exception as e:
-                    logging.error('Failed to save CSV: %s', e)
+                                formatted_row = {
+                k: (json.dumps(v) if isinstance(v, (dict, list)) else v)
+                for k, v in sanitized.items()
+            }
+            try:
+                writer.writerow(formatted_row)
+                logging.info('Saved CSV -> %s', outpath)
+            except Exception as e:
+                logging.error('Failed to save CSV: %s', e)
 
     # Thumbnail
     thumb_path = None
@@ -1178,7 +1356,10 @@ def process_and_save(path: str, args: argparse.Namespace, outputs_map: dict[str,
                     if saved:
                         logging.info('Saved pixel image(s): %s', saved)
                     else:
-                        logging.warning('No pixel images saved (pixel data missing, compressed or not decodable) for %s', path)
+                        logging.warning(
+                            'No pixel images saved (pixel data missing, compressed or not decodable) for %s',
+                            path
+                        )
                 except Exception as e:
                     logging.error('Failed to extract/save pixel images: %s', e)
 
@@ -1263,7 +1444,15 @@ def generate_html_report(metadata: dict[str, Any], thumbnail_path: str | None, o
     with open(out_html, 'w', encoding='utf-8') as f:
         f.write('\n'.join(html_lines))
 
-def generate_metadata_image(metadata: dict[str, Any], thumbnail_path: str | None, out_image: str, width: int = 1200):
+def generate_metadata_image(
+    metadata: dict[str, Any],
+    thumbnail_path: str | None,
+    out_image: str,
+    width: int = 1200,
+    img: PILImage = None,
+    draw: PILDraw = None,
+    font: PILFont = None
+):
     if not _PIL_AVAILABLE:
         raise RuntimeError("Pillow not installed")
     # normalized metadata keys
@@ -1383,7 +1572,7 @@ def main():
         for k,v in deps.items():
             logging.info('%s: %s', k, 'OK' if v else 'MISSING')
         return
-    
+
     show_banner(args)
 
     outputs_map = parse_output_items(args.output or [], args.output_dir)
