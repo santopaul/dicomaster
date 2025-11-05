@@ -161,7 +161,7 @@ If **Dicomaster** gains traction, user adoption, and community love, I plan to e
 ### **Let's build this together 🤝😊**
 
 I'd love to hear your thoughts!  
-If you've tried **Dicomaster**, or if you're into data science, medical AI, or DICOM workflows, Please let me know what you think in the comments.  
+If you've tried **Dicomaster**, or if you're into data science, medical AI, or DICOM workflows, Please let me know what you think.  
 What worked for you? What do you wish existed next?
 
 Every bit of feedback, idea, or story helps shape where this project goes next.
