@@ -35,6 +35,7 @@ import threading
 import traceback
 from collections.abc import Iterable
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from contextlib import suppress
 from datetime import datetime
 from pathlib import Path
 from typing import (
@@ -138,7 +139,7 @@ class ImageModule(Protocol):
 class ImageDrawModule(Protocol):
     """Protocol for PIL.ImageDraw module interface"""
 
-    def Draw(self, image: PILImage) -> PILDraw: ...
+    def Draw(self, image: PILImage) -> PILDraw: ...  # noqa: N802 - matches PIL.ImageDraw.Draw
 
 
 class ImageFontModule(Protocol):
@@ -179,9 +180,6 @@ try:
     has_numpy = True
 except ImportError:
     pass
-except ImportError:
-    _NP_AVAILABLE = False
-    NDArray = Any  # For type checking
 
 # Type aliases for clarity
 StrDict = dict[str, str]
@@ -199,13 +197,12 @@ except ImportError:
     InvalidDicomError = Exception
     _PYDICOM_AVAILABLE = False
 
-# Banner/color dependencies
+"""Banner/color dependencies (termcolor optional for coloring)."""
 try:
-    import pyfiglet
     from termcolor import COLORS as TERM_COLORS
     from termcolor import colored
 
-    _BANNER_AVAILABLE = True
+    _BANNER_AVAILABLE = True  # indicates color support available
 
     def safe_colored(
         text: str,
@@ -248,10 +245,8 @@ except ImportError:
 
 # Optional heavy deps
 try:
-    import numpy as np
-    from PIL import Image, ImageDraw, ImageFont
-
-    _PIL_AVAILABLE = True
+    # PIL availability flag (already imported above when possible)
+    _PIL_AVAILABLE = bool(pil_image)
 except Exception:
     _PIL_AVAILABLE = False
 
@@ -286,15 +281,7 @@ try:
 except Exception:
     _CRYPTO_AVAILABLE = False
 
-# banner optional
-# Banner libs optional
-try:
-    import pyfiglet
-    from termcolor import colored
-
-    _BANNER_AVAILABLE = True
-except ImportError:
-    _BANNER_AVAILABLE = False
+# Banner libs optional handled above; no duplicate imports here
 
 # colorama optional for colored logs (non-critical)
 try:
@@ -681,12 +668,14 @@ def pretty_print_stat(
             time_str = (full.get('study_time') or stat.get('study_time') or None)  # type: ignore[assignment]
         try:
             if date_str:
-                fmt, _future, dt_obj = format_dicom_datetime(date_str, time_str)  # type: ignore[misc]
+                fmt, future, dt_obj = format_dicom_datetime(date_str, time_str)  # type: ignore[misc]
+                # We'll recompute relative text so we can control 'in' vs 'ago' formatting
                 dt_display = fmt
                 if dt_obj is not None:
-                    rel = human_readable_delta(dt_obj)
+                    now_ref = datetime.now()
+                    rel = human_readable_delta(dt_obj, now_ref)
                     if rel and rel != 'just now':
-                        rel_text = f" ({rel} ago)"
+                        rel_text = f" (in {rel})" if future else f" ({rel} ago)"
         except Exception:
             # Fallback to whatever stat provided
             pass
@@ -752,10 +741,8 @@ def pretty_print_stat(
             if phi_flags:
                 extras.append(', '.join(phi_flags))
             if private_tags:
-                try:
+                with suppress(Exception):
                     extras.append(f"Private tags: {len(private_tags)}")
-                except Exception:
-                    pass
             # New line and no indentation for PHI warning
             print()
             print(f"{cc('⚠ PHI Warning:', 'red', ['bold'])} {cc(' | '.join(extras), 'red')}")
@@ -1008,7 +995,7 @@ def sanitize_for_json(obj: Any) -> Any:
 
         if isinstance(obj, Dataset):
             out = {}
-            for k in obj.keys():
+            for k in obj.keys():  # noqa: SIM118 - pydicom Dataset requires .keys() to get Tag objects
                 try:
                     v = obj.get(k)
                 except Exception:
@@ -1137,7 +1124,7 @@ def check_phi(ds: pydicom.dataset.Dataset) -> list[str]:
     ]:
         if ds.get(k):
             phi.append(k)
-    private = [t for t in ds.keys() if t.is_private]
+    private = [t for t in ds.keys() if t.is_private]  # noqa: SIM118 - need Tag objects
     if private:
         phi.append(f"Private tags: {len(private)}")
     for seq in ["RequestingService", "RequestingPhysician", "RequestingPhysicianName"]:
@@ -1148,7 +1135,7 @@ def check_phi(ds: pydicom.dataset.Dataset) -> list[str]:
 
 def list_private_tags(ds: DicomDataset, show_values: bool = False) -> list[dict[str, Any]]:
     out: list[dict[str, Any]] = []
-    tags = sorted([t for t in ds.keys() if t.is_private], key=lambda x: (x.group, x.elem))
+    tags = sorted([t for t in ds.keys() if t.is_private], key=lambda x: (x.group, x.elem))  # noqa: SIM118 - need Tag objects
     for tag in tags:
         try:
             elem = ds[tag]
@@ -1159,10 +1146,11 @@ def list_private_tags(ds: DicomDataset, show_values: bool = False) -> list[dict[
             creator = ds.get(creator_tag)
             creator_str = str(creator) if creator else ''
             value_preview = sanitize_for_json(elem.value)
-            if isinstance(value_preview, str) and len(value_preview) > 200:
-                vp = value_preview[:197] + "..."
-            else:
-                vp = value_preview
+            vp = (
+                value_preview[:197] + "..."
+                if isinstance(value_preview, str) and len(value_preview) > 200
+                else value_preview
+            )
             full = sanitize_for_json(elem.value) if show_values else None
             out.append(
                 {
@@ -1253,7 +1241,7 @@ def apply_anonymization_to_sanitized(
     """
     per_file_map: dict[str, Any] = {}
     for tag in tags:
-        for key in list(sanitized.keys()):
+        for key in list(sanitized):
             if key.lower() == tag.lower():
                 orig = sanitized.get(key)
                 if mode == 'pseudonymize':
@@ -1306,10 +1294,7 @@ def save_pixel_images(ds: DicomDataset, out_prefix: str, ext: str = '.png') -> l
             and np_arr.shape[1] > 4  # Non-trivial dimensions
             and np_arr.shape[2] > 4
         )
-        if dims_ok:
-            frames = [np_arr[i] for i in range(np_arr.shape[0])]
-        else:
-            frames = [np_arr]
+        frames = [np_arr[i] for i in range(np_arr.shape[0])] if dims_ok else [np_arr]
     elif np_arr.ndim == 4:
         frames = [np_arr[i] for i in range(np_arr.shape[0])]
     else:
@@ -1333,10 +1318,11 @@ def save_pixel_images(ds: DicomDataset, out_prefix: str, ext: str = '.png') -> l
         if getattr(f, 'dtype', None) is not None and f.dtype != np.uint8:
             try:
                 fmin, fmax = float(f.min()), float(f.max())
-                if fmax - fmin > 0:
-                    f = ((f - fmin) / (fmax - fmin) * 255.0).astype(np.uint8)
-                else:
-                    f = (f * 0).astype(np.uint8)
+                f = (
+                    ((f - fmin) / (fmax - fmin) * 255.0).astype(np.uint8)
+                    if fmax - fmin > 0
+                    else (f * 0).astype(np.uint8)
+                )
             except Exception:
                 try:
                     f = f.astype(np.uint8)
@@ -1356,10 +1342,9 @@ def save_pixel_images(ds: DicomDataset, out_prefix: str, ext: str = '.png') -> l
             except Exception:
                 img = img.convert('RGB')
 
-        if len(frames) == 1:
-            outpath = f"{out_prefix}{ext_l}"
-        else:
-            outpath = f"{out_prefix}_frame{idx}{ext_l}"
+        outpath = (
+            f"{out_prefix}{ext_l}" if len(frames) == 1 else f"{out_prefix}_frame{idx}{ext_l}"
+        )
 
         try:
             Path(outpath).parent.mkdir(parents=True, exist_ok=True)
@@ -1393,10 +1378,11 @@ def try_thumbnail(ds: pydicom.dataset.Dataset, out_path: str, max_size: int = 25
             frame = np_arr
         if frame.dtype != np.uint8:
             fmin, fmax = float(frame.min()), float(frame.max())
-            if fmax - fmin > 0:
-                frame = ((frame - fmin) / (fmax - fmin) * 255.0).astype(np.uint8)
-            else:
-                frame = (frame * 0).astype(np.uint8)
+            frame = (
+                ((frame - fmin) / (fmax - fmin) * 255.0).astype(np.uint8)
+                if fmax - fmin > 0
+                else (frame * 0).astype(np.uint8)
+            )
         img = Image.fromarray(frame)
         img = img.convert('L') if img.mode != 'L' else img
         img.thumbnail((max_size, max_size))
@@ -1471,7 +1457,7 @@ def get_dicom_metadata_from_ds(ds: DicomDataset, file_path: str) -> dict[str, An
         }
         full_report = {
             "manufacturer": str(ds.get('Manufacturer', 'N/A')),
-            "manufacturer_model_name": str(ds.get('ManufacturerModelName', ds.get('ManufacturerModelName', 'N/A'))),
+            "manufacturer_model_name": str(ds.get('ManufacturerModelName', 'N/A')),
             "model": str(ds.get('ManufacturerModelName', 'N/A')),
             "software_versions": ds.get('SoftwareVersions', 'N/A'),
             "magnetic_field_strength": ds.get('MagneticFieldStrength', 'N/A'),
@@ -1527,10 +1513,6 @@ def get_dicom_metadata_from_ds(ds: DicomDataset, file_path: str) -> dict[str, An
             "other_patient_ids_sequence": ds.get('OtherPatientIDsSequence', None),
             "other_patient_names": ds.get('OtherPatientNames', ''),
             "operators_name": ds.get('OperatorsName', ''),
-            "station_name": ds.get('StationName', ''),
-            "institution_name": ds.get('InstitutionName', ''),
-            "accession_number": ds.get('AccessionNumber', ''),
-            "study_id": ds.get('StudyID', ''),
             "series_description": ds.get('SeriesDescription', ''),
             "study_comments": ds.get('StudyComments', ''),
         }
@@ -1635,10 +1617,10 @@ def stream_write_csv(rows_iter: Iterable[dict[str, Any]], output_path: Path) -> 
     flushed = 0
     with open(output_path, 'w', newline='', encoding='utf-8') as f:
         writer = None
-        for i, row in enumerate(rows_iter):
+        for row in rows_iter:
             flat_row = {k: flatten_for_csv_row(v) for k, v in row.items()}
             if first:
-                writer = csv.DictWriter(f, fieldnames=list(flat_row.keys()))
+                writer = csv.DictWriter(f, fieldnames=list(flat_row))
                 writer.writeheader()
                 first = False
             writer.writerow(flat_row)
@@ -1703,10 +1685,11 @@ def process_and_save(
 
     per_file_map = {}
     if args.anonymize:
-        if not args.anonymize_tags:
-            tags_to_anon = DEFAULT_ANON_TAGS
-        else:
-            tags_to_anon = [t.strip() for t in args.anonymize_tags.split(',') if t.strip()]
+        tags_to_anon = (
+            DEFAULT_ANON_TAGS
+            if not args.anonymize_tags
+            else [t.strip() for t in args.anonymize_tags.split(',') if t.strip()]
+        )
         sanitized, per_file_map = apply_anonymization_to_sanitized(
             sanitized,
             tags_to_anon,
@@ -1812,7 +1795,7 @@ def process_and_save(
                         continue
 
                     # Prepare writer and header
-                    fieldnames = list(sanitized.keys())
+                    fieldnames = list(sanitized)
                     writer = csv.DictWriter(f, fieldnames=fieldnames)
                     writer.writeheader()
 
@@ -2016,6 +1999,15 @@ def generate_html_report(metadata: dict[str, Any], thumbnail_path: str | None, o
             continue
         html_lines.append(f'<li><strong>{k}:</strong> {sanitize_for_json(v)}</li>')
     html_lines.append('</ul></div>')
+    # Urgent and PHI summaries
+    if urgent:
+        html_lines.append('<div class="stat">')
+        html_lines.append(f'<p><strong>URGENT:</strong> {"; ".join(urgent_reasons)}</p>')
+        html_lines.append('</div>')
+    if phi_flags:
+        html_lines.append('<div class="stat">')
+        html_lines.append(f'<p><strong>PHI-like:</strong> {", ".join(map(str, phi_flags))}</p>')
+        html_lines.append('</div>')
     html_lines.append('<h2>Full (technical)</h2>')
     html_lines.append('<div class="full"><ul>')
     for k, v in full.items():
