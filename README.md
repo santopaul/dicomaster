@@ -1,6 +1,6 @@
 # Dicomaster — Secure DICOM anonymizer & batch processor
 
-[![PyPI version](https://badge.fury.io/py/dicomaster.svg)](https://badge.fury.io/py/dicomaster) [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT) [![Tests](https://github.com/santopaul/dicomaster/actions/workflows/ci.yml/badge.svg)](https://github.com/santopaul/dicom-tool/actions)
+[![PyPI version](https://badge.fury.io/py/dicomaster.svg)](https://badge.fury.io/py/dicomaster) [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT) [![Tests](https://github.com/santopaul/dicomaster/actions/workflows/ci.yml/badge.svg)](https://github.com/santopaul/dicomaster/actions)
 
 Dicomaster is a compact, production-minded CLI tool for extracting metadata from DICOM files, securely anonymizing PHI, and producing researcher- and clinician-friendly outputs (JSON, CSV, FHIR ImagingStudy, thumbnails, HTML reports and more).
 
