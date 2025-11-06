@@ -302,7 +302,7 @@ except Exception:
     Fore = Style = _Dummy()
 
 # Constants
-__version__ = "0.9.3"
+__version__ = "0.9.3.post1"
 DEFAULT_THREADS = 4
 MAX_THREAD_CAP = 64
 CRITICAL_KEYS = {

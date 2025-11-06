@@ -10,7 +10,7 @@
 > “Every byte of data represents a life worth protecting.” — *Santo Paul*
 ---
 
-![Stat information extraction using **Dicomaster**](readme_images/image1.png)
+![Stat information extraction using **Dicomaster**](https://raw.githubusercontent.com/santopaul/dicomaster/main/readme_images/image1.png)
 
 ### **TL;DR**
 
@@ -73,7 +73,7 @@ pip install dicomaster # Download Pypi version
 
 dicomaster --check-deps # Make sure every dependencies required are installed
 ```
-![CLI installation in Linux](readme_images/image2.png)
+![CLI installation in Linux](https://raw.githubusercontent.com/santopaul/dicomaster/main/readme_images/image2.png)
 
 Always creating a virtual environment is recommended.
 
@@ -108,7 +108,7 @@ For large-scale research datasets (e.g., RSNA or TCIA collections), **Dicomaster
 ```
 python dicomaster.py --batch /kaggle/input/rsna-intracranial-aneurysm-detection/series/1.2.826.0.1.3680043.8.498.10004044428023505108375152878107656647 -o agg-csv -t 8
 ```
-![The screenshot above shows Dicomaster processing ~200 files in seconds, thanks to its optimized batch engine and threaded design.](readme_images/image3.png)
+![The screenshot above shows Dicomaster processing ~200 files in seconds, thanks to its optimized batch engine and threaded design.](https://raw.githubusercontent.com/santopaul/dicomaster/main/readme_images/image3.png)
 
 The screenshot above shows **Dicomaster** processing ~200 files in seconds, thanks to its optimized batch engine and threaded design.
 

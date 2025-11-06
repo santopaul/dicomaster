@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.9.3.post1 — 2025-11-05
+
+Docs-only postrelease:
+- Fix README image links to use raw.githubusercontent URLs so images render on PyPI.
+- No code changes.
+
 ## 0.9.3 — 2025-11-05
 
 Patch:
