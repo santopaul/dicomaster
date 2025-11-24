@@ -79,11 +79,11 @@ Always creating a virtual environment is recommended.
 
 Or install using github
 ```
-git clone <https://github.com/santopaul/dicomaster.git>
+git clone https://github.com/santopaul/dicomaster.git
 
 cd dicomaster
 
-pip install -e .\[full\] # Full deps
+pip install -e .[full] # Full deps
 
 python dicomaster.py --check-deps # Verify setup
 ```
