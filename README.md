@@ -17,9 +17,36 @@
 [**Dicomaster**](https://github.com/santopaul/dicomaster) is a fast, secure, and clinician-friendly DICOM processor that makes handling medical images effortless.  
 It extracts metadata, anonymizes PHI, batches conversions, and outputs AI-ready formats (CSV, JSON, FHIR, images) while maintaining patient confidentiality.
 
+### What is DICOM and what does Dicomaster do?
+------------------------------------------
+
+#### _**\-Have you ever wondered how medical images like MRI, CT, or X-ray scans are stored and shared?**_
+Modern imaging machines don’t just capture pictures, they also store **patient details**, such as name, age, scan descriptions, and physician notes.
+All this information is saved as **metadata** inside specialized medical file formats like .dcm or .ima, collectively known as **DICOM** (Digital Imaging and Communications in Medicine).
+
+#### _**\-The problem?**_
+These files are complex and not easy for regular users or even many physicians to interact with.
+Also while developing modern AI models to detect diseases (like **brain aneurysms, breast cancer, or lung conditions)** researchers need access to **large datasets of medical images**.
+
+However, there’s a huge challenge: 
+**Patient data must remain confidential.** 
+If we don’t anonymize or properly secure this information, we risk violating regulations like **HIPAA** and compromising patient privacy.
+
+That’s where **Dicomaster** comes in.
+It’s a secure, high-performance tool that helps you:
+
+*   **Anonymize** DICOM files (remove or pseudonymize personal data)
+    
+*   **Organize and classify** massive datasets for AI or research
+    
+*   **Process thousands of images in seconds**
+    
+*   **Detect urgency** (for example, flag scans that show possible aneurysms or internal bleeding)
+
+
 ### **Why did I build this?**
 
-The idea for this tool started when I jumped into Kaggle's [**RSNA Intracranial Aneurysm Detection challenge**](https://www.kaggle.com/competitions/rsna-intracranial-aneurysm-detection). Those .dcm files of CTA, MRA, MRI were overwhelming. Manual preprocessing was slow, and PHI leaks could ruin patient trust (and cost hospitals millions). I built **Dicomaster** to fix that: a fast, secure, clinician-friendly CLI to extract metadata, anonymize data, and prep multimodal imaging for AI models while keeping patients safe. Brain aneurysms hit 3% of us, kill 500,000 yearly, and half are under 50. My tool's here to help catch them early, whether for Kaggle or real-world radiologists.
+**The idea** for this tool started when I jumped into Kaggle's [**RSNA Intracranial Aneurysm Detection challenge**](https://www.kaggle.com/competitions/rsna-intracranial-aneurysm-detection). Those .dcm files of CTA, MRA, MRI were overwhelming. Manual preprocessing was slow, and PHI leaks could ruin patient trust (and cost hospitals millions). I built **Dicomaster** to fix that: a fast, secure, clinician-friendly CLI to extract metadata, anonymize data, and prep multimodal imaging for AI models while keeping patients safe. Brain aneurysms hit 3% of us, kill 500,000 yearly, and half are under 50. My tool's here to help catch them early, whether for Kaggle or real-world radiologists.
 
 I saw those DICOM files on Kaggle and thought, **_"There's gotta be a better way."_** Prepping data for aneurysm detection shouldn't be a slog - it should be fast, safe, and ready for AI or hospital EHRs. I wanted a tool that:
 
