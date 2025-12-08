@@ -4,6 +4,7 @@
 [![PyPI version](https://badge.fury.io/py/dicomaster.svg)](https://badge.fury.io/py/dicomaster) 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT) 
 [![Tests](https://github.com/santopaul/dicomaster/actions/workflows/ci.yml/badge.svg)](https://github.com/santopaul/dicomaster/actions)
+[![PyPI Downloads](https://static.pepy.tech/personalized-badge/dicomaster?period=total&units=INTERNATIONAL_SYSTEM&left_color=GREY&right_color=GREEN&left_text=downloads)](https://pepy.tech/projects/dicomaster)
 [![Stars](https://img.shields.io/github/stars/santopaul/dicomaster?style=social)](https://github.com/santopaul/dicomaster/stargazers)
 
 ---
