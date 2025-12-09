@@ -9,6 +9,7 @@
 
 ---
 > “Every byte of data represents a life worth protecting.” — *Santo Paul*
+---
 ## Commercial Use Notice
 Dicomaster is free for personal, academic, educational, and research use under the MIT License.
 Commercial use requires a paid commercial license.
