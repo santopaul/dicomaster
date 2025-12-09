@@ -9,6 +9,21 @@
 
 ---
 > “Every byte of data represents a life worth protecting.” — *Santo Paul*
+## Commercial Use Notice
+Dicomaster is free for personal, academic, educational, and research use under the MIT License.
+Commercial use requires a paid commercial license.
+
+This includes (but is not limited to):
+- Integration into paid software or cloud services
+- Use inside hospital systems
+- Use by PACS companies
+- Use by telemedicine platforms
+
+Reselling, embedding, or distributing Dicomaster as part of another product
+
+To obtain a commercial license, contact:
+📩 [santopaul2005@gmail.com]
+
 ---
 
 ![Stat information extraction using **Dicomaster**](readme_images/image1.png)
