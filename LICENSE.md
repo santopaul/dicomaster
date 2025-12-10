@@ -1,4 +1,4 @@
-DICOMASTER SOFTWARE – DUAL LICENSE NOTICE
+# DICOMASTER SOFTWARE – DUAL LICENSE NOTICE
 Copyright (c) 2025 Santo Paul
 
 Dicomaster is licensed under a dual-license model. Your usage of this software
@@ -7,9 +7,9 @@ is governed by **either** the MIT Open License (non-commercial permissible use)
 use). By downloading, installing, accessing, or using this software, you agree
 to be bound by the applicable terms below.
 
-=====================================================================
-I. OPEN-SOURCE LICENSE (MIT License) – Non-Commercial Use Only
-=====================================================================
+
+## I. OPEN-SOURCE LICENSE (MIT License) – Non-Commercial Use Only
+
 
 Users engaging in the following activities may use Dicomaster under the MIT
 License located in `LICENSE-OPEN.txt`:
@@ -35,9 +35,7 @@ the Licensor at: **santopaul2005@gmail.com**.
 
 The MIT License is included as `LICENSE-OPEN.txt`.
 
-=====================================================================
-II. COMMERCIAL LICENSE (Dicomaster Enterprise License)
-=====================================================================
+## II. COMMERCIAL LICENSE (Dicomaster Enterprise License)
 
 For hospitals, clinics, startups, companies, software vendors, imaging centers,
 AI companies, and all revenue-generating or clinical environments.
@@ -57,9 +55,7 @@ Possession of the source code *does not grant commercial rights*.
 To obtain a commercial license, contact:
 📧 **santopaul2005@gmail.com**
 
-=====================================================================
-III. NO WARRANTY
-=====================================================================
+## III. NO WARRANTY
 
 The Software is provided “AS IS”, without warranty of any kind, express or
 implied, including but not limited to performance, security, accuracy,
@@ -75,17 +71,13 @@ The Licensor assumes **no liability** for damages resulting from:
 Users are solely responsible for validating the suitability of the Software in
 their intended environment.
 
-=====================================================================
-IV. TRADEMARK NOTICE
-=====================================================================
+## IV. TRADEMARK NOTICE
 
 “Dicomaster” and associated branding, logos, and names are trademarks of
 **Santo Paul**. They may not be used to endorse or market derivative products
 without explicit written permission.
 
-=====================================================================
-V. CONTACT
-=====================================================================
+## V. CONTACT
 
 For licensing, commercial inquiries, security disclosures, or legal requests:
 📧 **santopaul2005@gmail.com**
