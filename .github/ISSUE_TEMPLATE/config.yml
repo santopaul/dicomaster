@@ -1,0 +1,5 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 📚 Documentation
+    url: https://github.com/santopaul/dicomaster#readme
+    about: Read the README for installation and usage.

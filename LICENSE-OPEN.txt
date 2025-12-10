@@ -19,3 +19,13 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
+
+---------------------------
+COMMERCIAL USE NOTICE
+---------------------------
+Dicomaster is also available under a commercial enterprise license that includes
+HIPAA/GDPR compliance features, audit logging, security guarantees, priority
+support, and production deployments. 
+
+If you intend to use Dicomaster commercially, in hospitals, or inside a
+revenue-generating product, please see LICENSE-ENTERPRISE.txt or contact: santopaul2005@gmail.com

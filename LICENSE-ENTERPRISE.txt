@@ -1,0 +1,75 @@
+DICOMASTER ENTERPRISE LICENSE AGREEMENT (v1.0)
+Copyright (c) 2025 Santo Paul
+All Rights Reserved.
+
+This Agreement governs the commercial, clinical, or production use of
+Dicomaster (“Software”) by hospitals, companies, startups, clinical
+organizations, or any revenue-generating entity (“Licensee”).
+
+By using the Software beyond the scope of the MIT license, the Licensee
+agrees to the following terms:
+
+---------------------------
+1. GRANT OF LICENSE
+---------------------------
+Upon payment, the Licensee receives:
+- Non-exclusive, non-transferable rights to use the Software
+- Permission to integrate the Software into internal workflows or products
+- Access to enterprise-only features, modules, and security patches
+- Access to on-premise Docker builds
+- Priority engineering support (email + optional SLA)
+- Optional HIPAA/GDPR-compliant deployment (BAA available)
+
+The License allows processing of unlimited DICOM studies within the licensed entity.
+
+---------------------------
+2. LICENSE TIERS & FEES
+---------------------------
+
+A. Single-Organization License  
+   Annual Fee: **USD $1,000 / year**  
+   Scope: One hospital/company, unlimited internal users, one geographic site.
+
+B. Multi-Site / Enterprise Unlimited License  
+   Annual Fee: **USD $10,000 / year**  
+   Scope: Unlimited sites, branches, subsidiaries, or distributed teams.
+
+C. OEM / Redistribution License  
+   (Required if bundling Dicomaster into a paid SaaS product.)  
+   **Custom pricing — contact developer.**
+
+---------------------------
+3. RESTRICTIONS
+---------------------------
+Licensee may NOT:
+- Redistribute the Software outside the organization
+- Sell or offer Dicomaster functions inside a competing anonymizer product
+- Use Enterprise features without a valid subscription
+- Attempt to reverse engineer, bypass, or weaken anonymization protections
+- Use the Software for unlawful purposes or breach of patient privacy regulations
+
+---------------------------
+4. WARRANTY & LIABILITY
+---------------------------
+The Software is provided “AS IS”.  
+No liability is assumed for damages caused by:
+- Misconfiguration
+- Incorrect anonymization workflows
+- Clinical misinterpretation
+- System breaches not caused by the Software itself
+
+All risk is borne by the Licensee.
+
+---------------------------
+5. TERMINATION
+---------------------------
+License terminates if:
+- Fees are unpaid after 30 days
+- Terms of this Agreement are violated
+- Unauthorized redistribution is detected
+
+---------------------------
+6. CONTACT
+---------------------------
+For enterprise purchases, OEM licensing, or custom agreements:
+📧 Email: **santopaul2005@gmail.com**
