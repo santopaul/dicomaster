@@ -20,7 +20,7 @@ This includes (but is not limited to):
 - Use by PACS companies
 - Use by telemedicine platforms
 
-Reselling, embedding, or distributing Dicomaster as part of another product
+Using Dicomaster in commercial or clinical environments without the proper license constitutes copyright infringement and may result in retroactive fees.
 
 To obtain a commercial license, contact:
 📩 [santopaul2005@gmail.com]
